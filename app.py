@@ -1535,12 +1535,12 @@ with st.sidebar:
         ]
     )
 
-    view_mode = st.radio(
-        "View",
-        ["Overview", "Analytics", "Reports", "Updates"]
-    )
+  view_mode = st.radio(
+    "View",
+    ["Overview", "Analytics", "Reports", "Updates"]
+)
 
-   if st.button("🧪 Test EFSA Fetch", use_container_width=True):
+if st.button("🧪 Test EFSA Fetch", use_container_width=True):
     with st.spinner("Testing EFSA RSS..."):
         try:
             efsa_test = fetch_efsa_updates()
