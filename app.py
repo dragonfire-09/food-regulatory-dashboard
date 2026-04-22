@@ -232,7 +232,7 @@ st.markdown("""
     .meta-row {
         font-size: 0.9rem;
         color: #64748b;
-        margin-bottom: 0.85rem;
+        margin-bottom: 0.5rem;
     }
 
     .pill {
@@ -419,6 +419,15 @@ def priority_class(priority: str):
     if p == "review":
         return "pill pill-priority-review"
     return "pill pill-priority-monitor"
+
+
+def source_status_badge(status: str):
+    status = str(status).strip().lower()
+    if status == "live":
+        return "🟢 Live"
+    if status == "fallback":
+        return "🟠 Fallback"
+    return "⚪ Unknown"
 
 
 def format_date(value):
@@ -1001,6 +1010,9 @@ def apply_search(df, query: str):
             str(row.get("recommended_action", "")),
             str(row.get("raw_text", "")),
             str(row.get("why_this_matters", "")),
+            str(row.get("notification_reference", "")),
+            str(row.get("fetch_method", "")),
+            str(row.get("source_status", "")),
         ]
         haystack = " ".join(values).lower()
         return q in haystack
@@ -1185,7 +1197,7 @@ def render_updates(filtered, client_type):
 
     search_query = st.text_input(
         "Search updates",
-        placeholder="Search by title, topic, source, summary, action, or raw text..."
+        placeholder="Search by title, topic, source, summary, action, raw text, or notification reference..."
     )
 
     updates_df = apply_search(filtered, search_query)
@@ -1221,12 +1233,20 @@ def render_updates(filtered, client_type):
         why_matters = row.get("why_this_matters", "")
         priority_css = priority_class(priority)
 
+        source_status = row.get("source_status", "unknown")
+        fetch_method = row.get("fetch_method", "n/a")
+        notification_reference = row.get("notification_reference", "n/a")
+        last_verified = row.get("last_verified", "n/a")
+        status_badge = source_status_badge(source_status)
+
         adjusted_action = client_adjusted_action(recommended_action, client_type, topic, priority)
 
         st.markdown(f"""
         <div class="update-card {extra_class}">
             <div class="update-title">{title}</div>
             <div class="meta-row">Source: {source} | Date: {date_str} | Jurisdiction: {jurisdiction}</div>
+            <div class="meta-row">Status: {status_badge} | Fetch Method: {fetch_method} | Reference: {notification_reference}</div>
+            <div class="meta-row">Last Verified: {last_verified}</div>
             <div>
                 <span class="pill pill-source">{source}</span>
                 <span class="pill pill-topic">{topic}</span>
@@ -1420,16 +1440,12 @@ if not filtered.empty:
     filtered["priority"] = filtered["impact_score"].apply(determine_priority)
     filtered["why_this_matters"] = filtered.apply(lambda row: why_this_matters(row, client_type), axis=1)
 
-# ---------- VIEW MODE ----------
 if view_mode == "Overview":
     render_overview(filtered, client_type)
-
 elif view_mode == "Analytics":
     render_analytics_section(filtered)
-
 elif view_mode == "Reports":
     render_reports(filtered, client_type)
-
 elif view_mode == "Updates":
     render_updates(filtered, client_type)
 
