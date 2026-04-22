@@ -1535,7 +1535,7 @@ with st.sidebar:
         ]
     )
 
-  view_mode = st.radio(
+view_mode = st.radio(
     "View",
     ["Overview", "Analytics", "Reports", "Updates"]
 )
