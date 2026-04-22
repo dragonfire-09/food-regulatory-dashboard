@@ -1,7 +1,7 @@
 import feedparser
 from dateutil import parser as date_parser
 
-
+ 
 EFSA_FEED_URL = "https://www.efsa.europa.eu/en/press/rss"
 
 
