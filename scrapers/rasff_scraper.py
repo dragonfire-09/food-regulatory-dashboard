@@ -1,16 +1,19 @@
 import re
+from datetime import datetime
+
 import requests
 from bs4 import BeautifulSoup
-from datetime import datetime
 
 
 RASFF_RESULTS_URL = "https://webgate.ec.europa.eu/rasff-window/screen/list"
 HEADERS = {
-    "User-Agent": "Mozilla/5.0 (compatible; FoodRegDashboard/1.0; +https://example.com)"
+    "User-Agent": "Mozilla/5.0 (compatible; FoodRegDashboard/1.0)"
 }
 
 
 def fallback_rasff_examples():
+    now_str = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+
     return [
         {
             "id": "rasff-demo-1",
@@ -25,10 +28,10 @@ def fallback_rasff_examples():
             "recommended_action": "Review suppliers, identify exposed batches, and assess whether any rapid response action is required.",
             "raw_text": "RASFF contamination notification related to poultry and microbiological risk.",
             "url": RASFF_RESULTS_URL,
+            "notification_reference": "n/a",
             "source_status": "fallback",
             "fetch_method": "fallback",
-            "notification_reference": "n/a",
-            "last_verified": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+            "last_verified": now_str,
         },
         {
             "id": "rasff-demo-2",
@@ -43,10 +46,10 @@ def fallback_rasff_examples():
             "recommended_action": "Review analytical controls, supplier records, and any affected incoming lots.",
             "raw_text": "RASFF chemical contamination notification involving pesticide residues.",
             "url": RASFF_RESULTS_URL,
+            "notification_reference": "n/a",
             "source_status": "fallback",
             "fetch_method": "fallback",
-            "notification_reference": "n/a",
-            "last_verified": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+            "last_verified": now_str,
         },
         {
             "id": "rasff-demo-3",
@@ -61,10 +64,10 @@ def fallback_rasff_examples():
             "recommended_action": "Review traceability files, supplier documentation, and downstream product identification processes.",
             "raw_text": "RASFF information notice associated with incomplete product traceability records.",
             "url": RASFF_RESULTS_URL,
+            "notification_reference": "n/a",
             "source_status": "fallback",
             "fetch_method": "fallback",
-            "notification_reference": "n/a",
-            "last_verified": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+            "last_verified": now_str,
         },
         {
             "id": "rasff-demo-4",
@@ -79,10 +82,10 @@ def fallback_rasff_examples():
             "recommended_action": "Check label controls, affected stock, and escalation procedures for allergen-related incidents.",
             "raw_text": "RASFF allergen-related notification involving undeclared ingredients in a snack product.",
             "url": RASFF_RESULTS_URL,
+            "notification_reference": "n/a",
             "source_status": "fallback",
             "fetch_method": "fallback",
-            "notification_reference": "n/a",
-            "last_verified": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+            "last_verified": now_str,
         },
         {
             "id": "rasff-demo-5",
@@ -97,21 +100,22 @@ def fallback_rasff_examples():
             "recommended_action": "Review provenance records, claim substantiation, and supplier authenticity checks.",
             "raw_text": "RASFF fraud-related communication linked to product origin declaration.",
             "url": RASFF_RESULTS_URL,
+            "notification_reference": "n/a",
             "source_status": "fallback",
             "fetch_method": "fallback",
-            "notification_reference": "n/a",
-            "last_verified": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+            "last_verified": now_str,
         },
     ]
 
 
 def detect_topic(text: str) -> str:
     t = text.lower()
+
     if "allergen" in t or "label" in t:
         return "Labeling"
     if "traceability" in t:
         return "Traceability"
-    if "fraud" in t or "origin" in t:
+    if "fraud" in t or "origin" in t or "authenticity" in t:
         return "Fraud"
     if "novel" in t:
         return "Novel Foods"
@@ -120,10 +124,18 @@ def detect_topic(text: str) -> str:
 
 def detect_risk(text: str) -> str:
     t = text.lower()
-    if any(word in t for word in ["salmonella", "listeria", "contamination", "undeclared allergen", "recall", "aflatoxin"]):
+
+    if any(word in t for word in [
+        "salmonella", "listeria", "contamination", "undeclared allergen",
+        "recall", "aflatoxin", "pathogen"
+    ]):
         return "High"
-    if any(word in t for word in ["traceability", "fraud", "origin", "migration", "residue"]):
+
+    if any(word in t for word in [
+        "traceability", "fraud", "origin", "migration", "residue", "pesticide"
+    ]):
         return "Medium"
+
     return "Low"
 
 
@@ -138,13 +150,13 @@ def normalize_date(text: str) -> str:
 def extract_notification_links(html: str, limit: int = 5):
     pattern = r"https://webgate\.ec\.europa\.eu/rasff-window/screen/notification/\d+"
     urls = re.findall(pattern, html)
-    deduped = []
-    seen = set()
 
-    for u in urls:
-        if u not in seen:
-            seen.add(u)
-            deduped.append(u)
+    seen = set()
+    deduped = []
+    for url in urls:
+        if url not in seen:
+            seen.add(url)
+            deduped.append(url)
         if len(deduped) >= limit:
             break
 
@@ -152,10 +164,10 @@ def extract_notification_links(html: str, limit: int = 5):
 
 
 def parse_detail_page(detail_url: str, session: requests.Session, index: int):
-    resp = session.get(detail_url, timeout=20)
-    resp.raise_for_status()
+    response = session.get(detail_url, timeout=20)
+    response.raise_for_status()
 
-    soup = BeautifulSoup(resp.text, "html.parser")
+    soup = BeautifulSoup(response.text, "html.parser")
     text = soup.get_text(" ", strip=True)
 
     title_match = re.search(
@@ -186,8 +198,6 @@ def parse_detail_page(detail_url: str, session: requests.Session, index: int):
         impact = "This appears lower urgency but may still be relevant for future compliance review."
         action = "Monitor developments and document relevance for internal horizon scanning."
 
-    raw_text = text[:2500]
-
     return {
         "id": f"rasff-{reference}",
         "title": title,
@@ -199,7 +209,7 @@ def parse_detail_page(detail_url: str, session: requests.Session, index: int):
         "ai_summary": title,
         "business_impact": impact,
         "recommended_action": action,
-        "raw_text": raw_text,
+        "raw_text": text[:2500],
         "url": detail_url,
         "notification_reference": reference,
         "source_status": "live",
