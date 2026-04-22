@@ -5,9 +5,14 @@ from pathlib import Path
 from datetime import datetime
 from io import BytesIO
 
-from openai import OpenAI
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
+
+# Optional OpenAI import
+try:
+    from openai import OpenAI
+except Exception:
+    OpenAI = None
 
 from scrapers.efsa_rss_scraper import fetch_efsa_updates
 from scrapers.rasff_scraper import fetch_rasff_updates
@@ -23,12 +28,20 @@ BASE_DATA_FILE = DATA_DIR / "regulatory_data.json"
 LIVE_DATA_FILE = DATA_DIR / "live_updates.json"
 
 
-# ---------- OPENAI ----------
+# ---------- OPTIONAL OPENAI ----------
 def get_openai_client():
-    api_key = st.secrets.get("OPENAI_API_KEY", None)
-    if not api_key:
+    try:
+        api_key = st.secrets.get("OPENAI_API_KEY", None)
+    except Exception:
+        api_key = None
+
+    if not api_key or OpenAI is None:
         return None
-    return OpenAI(api_key=api_key)
+
+    try:
+        return OpenAI(api_key=api_key)
+    except Exception:
+        return None
 
 
 # ---------- CUSTOM CSS ----------
@@ -194,6 +207,11 @@ st.markdown("""
         font-weight: 700;
     }
 
+    .stDownloadButton button {
+        border-radius: 12px;
+        font-weight: 700;
+    }
+
     .stSidebar {
         background-color: #f8fafc;
     }
@@ -296,6 +314,26 @@ Recommended Action:
 """
 
 
+def wrap_text(text: str, max_chars: int = 95):
+    if not text:
+        return [""]
+    words = text.split()
+    lines = []
+    current = ""
+
+    for word in words:
+        trial = f"{current} {word}".strip()
+        if len(trial) <= max_chars:
+            current = trial
+        else:
+            if current:
+                lines.append(current)
+            current = word
+    if current:
+        lines.append(current)
+    return lines
+
+
 def build_pdf_bytes(title: str, content: str) -> bytes:
     buffer = BytesIO()
     pdf = canvas.Canvas(buffer, pagesize=A4)
@@ -309,16 +347,9 @@ def build_pdf_bytes(title: str, content: str) -> bytes:
     y -= 30
 
     pdf.setFont("Helvetica", 10)
-    lines = content.splitlines()
-
-    for line in lines:
-        if y < 60:
-            pdf.showPage()
-            pdf.setFont("Helvetica", 10)
-            y = height - 50
-
-        wrapped = wrap_text(line, 95)
-        for wrapped_line in wrapped:
+    for line in content.splitlines():
+        wrapped_lines = wrap_text(line, 95)
+        for wrapped_line in wrapped_lines:
             if y < 60:
                 pdf.showPage()
                 pdf.setFont("Helvetica", 10)
@@ -331,25 +362,6 @@ def build_pdf_bytes(title: str, content: str) -> bytes:
     return buffer.read()
 
 
-def wrap_text(text: str, max_chars: int = 95):
-    if not text:
-        return [""]
-    words = text.split()
-    lines = []
-    current = ""
-
-    for word in words:
-        test = f"{current} {word}".strip()
-        if len(test) <= max_chars:
-            current = test
-        else:
-            lines.append(current)
-            current = word
-    if current:
-        lines.append(current)
-    return lines
-
-
 def sanitize_filename(value: str) -> str:
     value = value.lower().strip()
     for ch in ['/', '\\', ':', '*', '?', '"', '<', '>', '|']:
@@ -358,19 +370,70 @@ def sanitize_filename(value: str) -> str:
     return value[:80]
 
 
+# ---------- LOCAL FALLBACK ----------
+def local_ai_fallback(row):
+    title = str(row.get("title", "Regulatory update"))
+    topic = str(row.get("topic", "Food Safety"))
+    source = str(row.get("source", "Regulatory source"))
+    risk = str(row.get("risk_level", "Medium")).lower()
+    raw_text = str(row.get("raw_text", ""))
+    existing_summary = str(row.get("ai_summary", ""))
+
+    base_summary = existing_summary if existing_summary else f"This update relates to {topic.lower()} and may require compliance review."
+
+    title_lower = title.lower()
+    topic_lower = topic.lower()
+    raw_lower = raw_text.lower()
+
+    if "label" in title_lower or "label" in topic_lower:
+        impact = "Food businesses may need to review packaging, declarations, and label approval workflows."
+        action = "Review current labels, compare them against the update, and prepare packaging revisions if needed."
+    elif "traceability" in title_lower or "traceability" in topic_lower:
+        impact = "Operators may need stronger product tracking, recordkeeping, and data coordination across the supply chain."
+        action = "Assess traceability records, supplier data quality, and system readiness for compliance checks."
+    elif "contaminant" in title_lower or "salmonella" in raw_lower or "pesticide" in raw_lower:
+        impact = "There may be increased recall exposure, supplier scrutiny, and regulatory risk for affected categories."
+        action = "Check affected products or batches, review supplier controls, and prepare a targeted risk assessment."
+    elif "fraud" in title_lower:
+        impact = "Authentication, origin claims, and documentary controls may face closer regulatory scrutiny."
+        action = "Review provenance records, product claims, and internal controls for documentation gaps."
+    elif "novel" in title_lower or "novel" in topic_lower:
+        impact = "This may create opportunities for product development, but authorization and market-entry timing should be assessed carefully."
+        action = "Review eligibility, product formulation, and approval timing before commercialization planning."
+    else:
+        impact = "This update may affect compliance planning, internal review processes, and market-facing documentation."
+        action = "Review the update internally and determine whether legal, quality, or supply chain teams need to respond."
+
+    if risk == "high":
+        impact = "This appears commercially significant and may require immediate compliance escalation, supplier review, or market action."
+        action = "Prioritize immediate internal review, identify affected products or partners, and prepare a rapid response plan."
+    elif risk == "low":
+        impact = "This appears lower urgency but may still be relevant for horizon scanning and future compliance planning."
+        action = "Log the update, monitor developments, and review relevance during the next compliance cycle."
+
+    return {
+        "ai_summary": f"{base_summary} Source: {source}.",
+        "business_impact": impact,
+        "recommended_action": action,
+    }
+
+
+# ---------- AI GENERATION ----------
 def generate_ai_analysis(row):
     client = get_openai_client()
+
     if client is None:
-        raise ValueError("OPENAI_API_KEY not found in Streamlit secrets.")
+        return local_ai_fallback(row)
 
-    title = row.get("title", "")
-    source = row.get("source", "")
-    topic = row.get("topic", "")
-    jurisdiction = row.get("jurisdiction", "")
-    raw_text = row.get("raw_text", "")
-    existing_summary = row.get("ai_summary", "")
+    try:
+        title = row.get("title", "")
+        source = row.get("source", "")
+        topic = row.get("topic", "")
+        jurisdiction = row.get("jurisdiction", "")
+        raw_text = row.get("raw_text", "")
+        existing_summary = row.get("ai_summary", "")
 
-    prompt = f"""
+        prompt = f"""
 You are a food regulatory intelligence analyst.
 
 Analyze this update and return STRICT JSON with these keys:
@@ -393,27 +456,22 @@ Existing summary: {existing_summary}
 Raw text: {raw_text}
 """
 
-    response = client.responses.create(
-        model="gpt-5.4",
-        input=prompt,
-    )
+        response = client.responses.create(
+            model="gpt-4.1-mini",
+            input=prompt,
+        )
 
-    text = response.output_text.strip()
-
-    # JSON parsing fallback
-    try:
+        text = response.output_text.strip()
         parsed = json.loads(text)
+
         return {
             "ai_summary": parsed.get("ai_summary", existing_summary or "No summary available."),
             "business_impact": parsed.get("business_impact", "No business impact available."),
             "recommended_action": parsed.get("recommended_action", "No recommended action available."),
         }
+
     except Exception:
-        return {
-            "ai_summary": text,
-            "business_impact": "Generated by AI, but JSON parsing failed.",
-            "recommended_action": "Review the generated output manually.",
-        }
+        return local_ai_fallback(row)
 
 
 # ---------- APP ----------
@@ -438,11 +496,16 @@ with st.sidebar:
     else:
         st.caption("No live refresh yet")
 
-    api_key_exists = bool(st.secrets.get("OPENAI_API_KEY", ""))
+    api_key_exists = False
+    try:
+        api_key_exists = bool(st.secrets.get("OPENAI_API_KEY", ""))
+    except Exception:
+        api_key_exists = False
+
     if api_key_exists:
-        st.success("AI summarization enabled")
+        st.success("OpenAI connected")
     else:
-        st.warning("AI summarization not configured")
+        st.info("Using built-in local summarization mode")
 
     if not df.empty:
         source_options = sorted(df["source"].dropna().astype(str).unique().tolist()) if "source" in df.columns else []
@@ -462,7 +525,7 @@ st.markdown("""
         AI-powered regulatory monitoring for food law, compliance, and supply chain intelligence.
     </p>
     <p class="small-note">
-        Live data sources: EFSA, RASFF | Prototype v2 with downloads + AI enrichment
+        Live data sources: EFSA, RASFF | Prototype with downloads and fallback AI enrichment
     </p>
 </div>
 """, unsafe_allow_html=True)
@@ -526,24 +589,27 @@ st.markdown('<div class="section-title">Latest Regulatory Updates</div>', unsafe
 
 for idx, row in filtered.iterrows():
     row_id = row.get("id", f"row-{idx}")
+
+    # session cache
+    if f"ai-{row_id}" in st.session_state:
+        cached = st.session_state[f"ai-{row_id}"]
+        ai_summary = cached["ai_summary"]
+        business_impact = cached["business_impact"]
+        recommended_action = cached["recommended_action"]
+    else:
+        ai_summary = row.get("ai_summary", "No summary available.")
+        business_impact = row.get("business_impact", "No impact analysis available.")
+        recommended_action = row.get("recommended_action", "No recommended action available.")
+
     title = row.get("title", "Untitled")
     source = row.get("source", "Unknown")
     date_str = format_date(row.get("date", None))
     topic = row.get("topic", "Unknown")
     jurisdiction = row.get("jurisdiction", "Unknown")
-    ai_summary = row.get("ai_summary", "No summary available.")
-    business_impact = row.get("business_impact", "No impact analysis available.")
-    recommended_action = row.get("recommended_action", "No recommended action available.")
     raw_text = row.get("raw_text", "")
     url = row.get("url", "")
     risk_css, risk_label = risk_class(row.get("risk_level", "Low"))
     extra_class = card_risk_class(row.get("risk_level", "Low"))
-
-    # AI enrich cache in session
-    if f"ai-{row_id}" in st.session_state:
-        ai_summary = st.session_state[f"ai-{row_id}"]["ai_summary"]
-        business_impact = st.session_state[f"ai-{row_id}"]["business_impact"]
-        recommended_action = st.session_state[f"ai-{row_id}"]["recommended_action"]
 
     st.markdown(f"""
     <div class="update-card {extra_class}">
@@ -563,29 +629,31 @@ for idx, row in filtered.iterrows():
     </div>
     """, unsafe_allow_html=True)
 
-    # Action buttons
-    b1, b2, b3 = st.columns([1, 1, 1])
-
-    with b1:
-        if st.button("AI Re-Summarize", key=f"ai-btn-{row_id}"):
-            with st.spinner("Generating AI analysis..."):
-                try:
-                    enriched = generate_ai_analysis(row)
-                    st.session_state[f"ai-{row_id}"] = enriched
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"AI generation failed: {e}")
-
-    alert_text = build_client_alert({
+    # Enriched row for exports
+    enriched_row = {
         **row.to_dict(),
         "ai_summary": ai_summary,
         "business_impact": business_impact,
         "recommended_action": recommended_action,
-    })
+    }
 
+    alert_text = build_client_alert(enriched_row)
     safe_name = sanitize_filename(title)
+    pdf_bytes = build_pdf_bytes(
+        title=f"Client Alert - {title}",
+        content=alert_text,
+    )
 
-    with b2:
+    col1, col2, col3 = st.columns([1, 1, 1])
+
+    with col1:
+        if st.button("AI Re-Summarize", key=f"ai-btn-{row_id}"):
+            with st.spinner("Generating updated analysis..."):
+                enriched = generate_ai_analysis(row)
+                st.session_state[f"ai-{row_id}"] = enriched
+                st.rerun()
+
+    with col2:
         st.download_button(
             label="Download TXT",
             data=alert_text,
@@ -594,12 +662,7 @@ for idx, row in filtered.iterrows():
             key=f"txt-{row_id}",
         )
 
-    pdf_bytes = build_pdf_bytes(
-        title=f"Client Alert - {title}",
-        content=alert_text,
-    )
-
-    with b3:
+    with col3:
         st.download_button(
             label="Download PDF",
             data=pdf_bytes,
@@ -614,4 +677,4 @@ for idx, row in filtered.iterrows():
     with st.expander("Show raw text"):
         st.write(raw_text if raw_text else "No raw text available.")
 
-st.caption("Prototype for regulatory horizon scanning, compliance monitoring, AI enrichment, and downloadable client intelligence.")
+st.caption("Prototype for regulatory horizon scanning, compliance monitoring, downloadable client alerts, and fallback AI enrichment.")
