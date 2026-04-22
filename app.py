@@ -1540,14 +1540,17 @@ with st.sidebar:
         ["Overview", "Analytics", "Reports", "Updates"]
     )
 
-    if st.button("🔄 Refresh Live Data", use_container_width=True):
-        with st.spinner("Fetching live updates from EFSA and RASFF..."):
-            try:
-                refresh_live_data()
-                st.success("Live data refreshed.")
-                st.rerun()
-            except Exception as e:
-                st.error(f"Refresh failed: {e}")
+   if st.button("🧪 Test EFSA Fetch", use_container_width=True):
+    with st.spinner("Testing EFSA RSS..."):
+        try:
+            efsa_test = fetch_efsa_updates()
+            st.write("EFSA fetch count:", len(efsa_test))
+            if efsa_test:
+                st.write("Sample:", efsa_test[:2])
+            else:
+                st.warning("No EFSA data returned")
+        except Exception as e:
+            st.error(f"EFSA test failed: {e}")
 
     last_updated_relative = format_relative_update_time(LIVE_DATA_FILE)
     st.caption(f"Last updated: {last_updated_relative}")
