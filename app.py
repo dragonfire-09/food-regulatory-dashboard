@@ -5,6 +5,7 @@ from pathlib import Path
 from datetime import datetime
 from io import BytesIO
 
+import plotly.express as px
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 
@@ -51,7 +52,7 @@ def get_openrouter_client():
         return None
 
 
-# ---------- CUSTOM CSS ----------
+# ---------- CSS ----------
 st.markdown("""
 <style>
     .main {
@@ -61,7 +62,7 @@ st.markdown("""
     .block-container {
         padding-top: 2rem;
         padding-bottom: 2rem;
-        max-width: 1240px;
+        max-width: 1280px;
     }
 
     .hero-box {
@@ -612,7 +613,33 @@ def local_ai_fallback(row, client_type):
         "ai_summary": f"{base_summary} Source: {source}.",
         "business_impact": impact,
         "recommended_action": action,
+        "_model_used": "local fallback",
     }
+
+
+# ---------- JSON EXTRACTION ----------
+def extract_json_block(text: str):
+    text = text.strip()
+
+    try:
+        return json.loads(text)
+    except Exception:
+        pass
+
+    text = text.replace("```json", "").replace("```", "").strip()
+
+    try:
+        return json.loads(text)
+    except Exception:
+        pass
+
+    start = text.find("{")
+    end = text.rfind("}")
+    if start != -1 and end != -1 and end > start:
+        candidate = text[start:end + 1]
+        return json.loads(candidate)
+
+    raise ValueError("No valid JSON found")
 
 
 # ---------- OPENROUTER AI ----------
@@ -624,6 +651,7 @@ def try_openrouter_model(client, model_name, prompt):
             {"role": "user", "content": prompt},
         ],
         temperature=0.2,
+        max_tokens=300,
     )
     return response.choices[0].message.content.strip()
 
@@ -642,16 +670,28 @@ def generate_ai_analysis(row, client_type):
     existing_summary = row.get("ai_summary", "")
 
     prompt = f"""
-Return STRICT JSON with these keys:
-- ai_summary
-- business_impact
-- recommended_action
+You are a food regulatory intelligence analyst.
+
+Task:
+Analyze the regulatory update below for the specified client type.
+
+Return output as VALID JSON ONLY.
+
+Required JSON schema:
+{{
+  "ai_summary": "string",
+  "business_impact": "string",
+  "recommended_action": "string"
+}}
 
 Rules:
-- Output JSON only.
-- Keep each field concise and professional.
-- Focus on compliance, supply chain, commercial, and consulting implications.
-- Tailor the response to this client type: {client_type}
+- Output must be valid JSON.
+- Do not add markdown.
+- Do not use code fences.
+- Do not add any text before or after the JSON.
+- Keep each value concise, clear, and professional.
+- Tailor the analysis to this client type: {client_type}.
+- Focus on compliance, supply chain, commercial relevance, and practical next steps.
 
 Update:
 Title: {title}
@@ -665,7 +705,7 @@ Raw text: {raw_text}
     for model_name in OPENROUTER_MODELS:
         try:
             text = try_openrouter_model(client, model_name, prompt)
-            parsed = json.loads(text)
+            parsed = extract_json_block(text)
             return {
                 "ai_summary": parsed.get("ai_summary", existing_summary or "No summary available."),
                 "business_impact": parsed.get("business_impact", "No business impact available."),
@@ -698,8 +738,8 @@ def generate_weekly_report(df, client_type):
     lines.append(f"- Review items: {(report_df['priority'] == 'Review').sum()}")
     lines.append(f"- Monitor items: {(report_df['priority'] == 'Monitor').sum()}")
     lines.append("")
-    lines.append("TOP PRIORITY UPDATES")
 
+    lines.append("TOP PRIORITY UPDATES")
     for i, (_, row) in enumerate(top_items.iterrows(), start=1):
         lines.append(f"{i}. {row.get('title', 'Untitled')}")
         lines.append(f"   Source: {row.get('source', 'Unknown')} | Date: {format_date(row.get('date'))}")
@@ -795,6 +835,131 @@ def generate_client_insights(df, client_type):
     }
 
 
+# ---------- ANALYTICS ----------
+def build_analytics_frames(df):
+    frames = {}
+
+    if df.empty:
+        return frames
+
+    work = df.copy()
+
+    if "date" in work.columns:
+        work["date_only"] = pd.to_datetime(work["date"], errors="coerce").dt.date
+
+    if "source" in work.columns:
+        frames["source_counts"] = work["source"].value_counts().reset_index()
+        frames["source_counts"].columns = ["source", "count"]
+
+    if "topic" in work.columns:
+        frames["topic_counts"] = work["topic"].value_counts().reset_index()
+        frames["topic_counts"].columns = ["topic", "count"]
+
+    if "priority" in work.columns:
+        frames["priority_counts"] = work["priority"].value_counts().reset_index()
+        frames["priority_counts"].columns = ["priority", "count"]
+
+    if "risk_level" in work.columns:
+        frames["risk_counts"] = work["risk_level"].astype(str).str.title().value_counts().reset_index()
+        frames["risk_counts"].columns = ["risk_level", "count"]
+
+    if "date_only" in work.columns:
+        trend = work.groupby("date_only").size().reset_index(name="count")
+        trend["date_only"] = pd.to_datetime(trend["date_only"])
+        frames["trend"] = trend.sort_values("date_only")
+
+    if "impact_score" in work.columns:
+        frames["score_by_topic"] = work.groupby("topic", dropna=False)["impact_score"].mean().reset_index()
+        frames["score_by_topic"]["impact_score"] = frames["score_by_topic"]["impact_score"].round(2)
+        frames["score_by_topic"] = frames["score_by_topic"].sort_values("impact_score", ascending=False)
+
+        frames["score_by_source"] = work.groupby("source", dropna=False)["impact_score"].mean().reset_index()
+        frames["score_by_source"]["impact_score"] = frames["score_by_source"]["impact_score"].round(2)
+        frames["score_by_source"] = frames["score_by_source"].sort_values("impact_score", ascending=False)
+
+    return frames
+
+
+def render_analytics_section(df):
+    st.markdown('<div class="section-title">Analytics</div>', unsafe_allow_html=True)
+
+    if df.empty:
+        st.info("No analytics available.")
+        return
+
+    frames = build_analytics_frames(df)
+
+    c1, c2 = st.columns(2)
+
+    if "source_counts" in frames:
+        fig_source = px.bar(
+            frames["source_counts"],
+            x="source",
+            y="count",
+            title="Updates by Source"
+        )
+        c1.plotly_chart(fig_source, use_container_width=True)
+
+    if "topic_counts" in frames:
+        fig_topic = px.pie(
+            frames["topic_counts"],
+            names="topic",
+            values="count",
+            title="Topic Distribution"
+        )
+        c2.plotly_chart(fig_topic, use_container_width=True)
+
+    c3, c4 = st.columns(2)
+
+    if "priority_counts" in frames:
+        fig_priority = px.bar(
+            frames["priority_counts"],
+            x="priority",
+            y="count",
+            title="Priority Distribution"
+        )
+        c3.plotly_chart(fig_priority, use_container_width=True)
+
+    if "risk_counts" in frames:
+        fig_risk = px.bar(
+            frames["risk_counts"],
+            x="risk_level",
+            y="count",
+            title="Risk Distribution"
+        )
+        c4.plotly_chart(fig_risk, use_container_width=True)
+
+    if "trend" in frames and not frames["trend"].empty:
+        fig_trend = px.line(
+            frames["trend"],
+            x="date_only",
+            y="count",
+            markers=True,
+            title="Update Volume Over Time"
+        )
+        st.plotly_chart(fig_trend, use_container_width=True)
+
+    c5, c6 = st.columns(2)
+
+    if "score_by_topic" in frames:
+        fig_score_topic = px.bar(
+            frames["score_by_topic"],
+            x="topic",
+            y="impact_score",
+            title="Average Impact Score by Topic"
+        )
+        c5.plotly_chart(fig_score_topic, use_container_width=True)
+
+    if "score_by_source" in frames:
+        fig_score_source = px.bar(
+            frames["score_by_source"],
+            x="source",
+            y="impact_score",
+            title="Average Impact Score by Source"
+        )
+        c6.plotly_chart(fig_score_source, use_container_width=True)
+
+
 # ---------- APP ----------
 ensure_data_dir()
 df = combine_data()
@@ -857,7 +1022,7 @@ st.markdown(f"""
         Decision-support layer for food law, compliance, traceability, and supply chain intelligence.
     </p>
     <p class="small-note">
-        Client mode: {client_type} | Live data sources: EFSA, RASFF | OpenRouter-ready free-model workflow
+        Client mode: {client_type} | Live data sources: EFSA, RASFF | OpenRouter-ready + analytics
     </p>
 </div>
 """, unsafe_allow_html=True)
@@ -945,6 +1110,9 @@ with c4:
         <div class="metric-value">{topic_count}</div>
     </div>
     """, unsafe_allow_html=True)
+
+# ---------- ANALYTICS ----------
+render_analytics_section(filtered)
 
 # ---------- CLIENT-SPECIFIC INSIGHTS PANEL ----------
 st.markdown('<div class="section-title">Client-Specific Insights</div>', unsafe_allow_html=True)
@@ -1127,4 +1295,4 @@ for idx, row in filtered.iterrows():
     with st.expander("Show raw text"):
         st.write(raw_text if raw_text else "No raw text available.")
 
-st.caption("Prototype for regulatory horizon scanning, client-specific intelligence, consulting outputs, and OpenRouter-based free-model enrichment.")
+st.caption("Prototype for regulatory horizon scanning, client-specific intelligence, consulting outputs, analytics, and OpenRouter-based free-model enrichment.")
