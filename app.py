@@ -1297,18 +1297,18 @@ def render_updates(filtered, client_type):
             recommended_action = row.get("recommended_action", "No recommended action available.")
             model_used = "initial data"
 
-        title = row.get("title", "Untitled")
-        source = row.get("source", "Unknown")
+        title = safe_value(row.get("title"), "Untitled")
+        source = safe_value(row.get("source"), "Unknown")
         date_str = format_date(row.get("date", None))
-        topic = row.get("topic", "Unknown")
+        topic = safe_value(row.get("topic"), "Unknown")
         jurisdiction = safe_value(row.get("jurisdiction"), "Unknown")
         raw_text = row.get("raw_text", "")
         url = row.get("url", "")
         risk_css, risk_label = risk_class(row.get("risk_level", "Low"))
         extra_class = card_risk_class(row.get("risk_level", "Low"))
         score = row.get("impact_score", 0)
-        priority = row.get("priority", "Monitor")
-        why_matters = row.get("why_this_matters", "")
+        priority = safe_value(row.get("priority"), "Monitor")
+        why_matters = safe_value(row.get("why_this_matters"), "")
         priority_css = priority_class(priority)
 
         source_status = safe_value(row.get("source_status"), "unknown")
