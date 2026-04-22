@@ -27,6 +27,7 @@ BASE_DATA_FILE = DATA_DIR / "regulatory_data.json"
 LIVE_DATA_FILE = DATA_DIR / "live_updates.json"
 
 
+# ---------- OPTIONAL OPENAI ----------
 def get_openai_client():
     try:
         api_key = st.secrets.get("OPENAI_API_KEY", None)
@@ -42,6 +43,7 @@ def get_openai_client():
         return None
 
 
+# ---------- CUSTOM CSS ----------
 st.markdown("""
 <style>
     .main {
@@ -248,6 +250,15 @@ st.markdown("""
         margin-bottom: 1rem;
     }
 
+    .insight-box {
+        background: #ffffff;
+        border-radius: 18px;
+        padding: 1rem 1.1rem;
+        border: 1px solid #e5e7eb;
+        box-shadow: 0 4px 16px rgba(15, 23, 42, 0.05);
+        margin-bottom: 1rem;
+    }
+
     .stButton button {
         border-radius: 12px;
         border: 1px solid #dbeafe;
@@ -268,6 +279,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
+# ---------- FILE HELPERS ----------
 def ensure_data_dir():
     DATA_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -311,6 +323,7 @@ def combine_data():
     return df.sort_values("date", ascending=False, na_position="last")
 
 
+# ---------- PRESENTATION HELPERS ----------
 def risk_class(level: str):
     level = str(level).strip().lower()
     if level == "high":
@@ -371,6 +384,7 @@ def build_pdf_bytes(title: str, content: str) -> bytes:
     buffer = BytesIO()
     pdf = canvas.Canvas(buffer, pagesize=A4)
     _, height = A4
+
     x = 50
     y = height - 50
 
@@ -380,8 +394,7 @@ def build_pdf_bytes(title: str, content: str) -> bytes:
 
     pdf.setFont("Helvetica", 10)
     for line in content.splitlines():
-        wrapped_lines = wrap_text(line, 95)
-        for wrapped_line in wrapped_lines:
+        for wrapped_line in wrap_text(line, 95):
             if y < 60:
                 pdf.showPage()
                 pdf.setFont("Helvetica", 10)
@@ -402,8 +415,10 @@ def sanitize_filename(value: str) -> str:
     return value[:80]
 
 
+# ---------- CONSULTING LOGIC ----------
 def calculate_impact_score(row, client_type):
     score = 0
+
     risk = str(row.get("risk_level", "Low")).lower()
     topic = str(row.get("topic", "")).lower()
     title = str(row.get("title", "")).lower()
@@ -424,7 +439,7 @@ def calculate_impact_score(row, client_type):
     if "rasff" in source:
         score += 2
 
-    if "recall" in title or "salmonella" in title or "allergen" in title:
+    if any(word in title for word in ["recall", "salmonella", "allergen", "listeria"]):
         score += 2
 
     if client_type == "Exporter":
@@ -506,6 +521,7 @@ def client_adjusted_action(base_action, client_type, topic, priority):
         extra = "Assess product-market fit implications, packaging assumptions, and authorization timing."
     else:
         extra = "Review internal QA, regulatory, and production implications."
+
     return f"{base_action} {extra}"
 
 
@@ -541,6 +557,7 @@ Recommended Action:
 """
 
 
+# ---------- FALLBACK AI ----------
 def local_ai_fallback(row, client_type):
     title = str(row.get("title", "Regulatory update"))
     topic = str(row.get("topic", "Food Safety"))
@@ -550,6 +567,7 @@ def local_ai_fallback(row, client_type):
     existing_summary = str(row.get("ai_summary", ""))
 
     base_summary = existing_summary if existing_summary else f"This update relates to {topic.lower()} and may require compliance review."
+
     title_lower = title.lower()
     topic_lower = topic.lower()
     raw_lower = raw_text.lower()
@@ -589,8 +607,10 @@ def local_ai_fallback(row, client_type):
     }
 
 
+# ---------- REAL OR FALLBACK AI ----------
 def generate_ai_analysis(row, client_type):
     client = get_openai_client()
+
     if client is None:
         return local_ai_fallback(row, client_type)
 
@@ -638,10 +658,12 @@ Raw text: {raw_text}
             "business_impact": parsed.get("business_impact", "No business impact available."),
             "recommended_action": parsed.get("recommended_action", "No recommended action available."),
         }
+
     except Exception:
         return local_ai_fallback(row, client_type)
 
 
+# ---------- REPORTS ----------
 def generate_weekly_report(df, client_type):
     if df.empty:
         return "No updates available for the selected filters."
@@ -672,10 +694,95 @@ def generate_weekly_report(df, client_type):
         lines.append("")
 
     lines.append("CONSULTING VIEW")
-    lines.append("This tool translates regulatory updates into prioritized decision-support outputs tailored to client type.")
+    lines.append("This report translates regulatory updates into prioritized decision-support outputs tailored to client type.")
     return "\n".join(lines)
 
 
+def build_full_report(df, client_type):
+    if df.empty:
+        return "No data available."
+
+    df = df.sort_values("impact_score", ascending=False)
+
+    lines = []
+    lines.append("FOOD REGULATORY INTELLIGENCE REPORT")
+    lines.append("")
+    lines.append(f"Client Type: {client_type}")
+    lines.append(f"Generated: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC")
+    lines.append(f"Total updates: {len(df)}")
+    lines.append("")
+    lines.append("EXECUTIVE SUMMARY")
+    lines.append(f"- Immediate: {(df['priority'] == 'Immediate').sum()}")
+    lines.append(f"- Review: {(df['priority'] == 'Review').sum()}")
+    lines.append(f"- Monitor: {(df['priority'] == 'Monitor').sum()}")
+    lines.append("")
+
+    lines.append("TOP PRIORITY ITEMS")
+    top = df.head(5)
+    for i, (_, row) in enumerate(top.iterrows(), 1):
+        lines.append(f"{i}. {row['title']}")
+        lines.append(f"   Score: {row['impact_score']}/10 | Priority: {row['priority']}")
+        lines.append(f"   Why: {row['why_this_matters']}")
+        lines.append("")
+
+    lines.append("FULL REGULATORY LIST")
+    for _, row in df.iterrows():
+        lines.append(f"- {row['title']}")
+        lines.append(f"  Source: {row['source']} | Date: {format_date(row['date'])}")
+        lines.append(f"  Priority: {row['priority']} | Score: {row['impact_score']}/10")
+        lines.append(f"  Action: {row['recommended_action']}")
+        lines.append("")
+
+    return "\n".join(lines)
+
+
+# ---------- CLIENT INSIGHTS ----------
+def generate_client_insights(df, client_type):
+    if df.empty:
+        return {
+            "headline": "No updates available for the selected filters.",
+            "key_risk": "No key risk detected.",
+            "operational_focus": "No operational focus available.",
+            "recommended_next_step": "Refresh data or broaden filters."
+        }
+
+    sorted_df = df.sort_values("impact_score", ascending=False)
+
+    top_row = sorted_df.iloc[0]
+    top_topic = sorted_df["topic"].mode().iloc[0] if "topic" in sorted_df.columns and not sorted_df["topic"].mode().empty else "Food Safety"
+
+    immediate_count = (sorted_df["priority"] == "Immediate").sum()
+    high_risk_count = (sorted_df["risk_level"].astype(str).str.lower() == "high").sum()
+
+    headline = (
+        f"For {client_type.lower()}s, the current regulatory picture suggests "
+        f"{immediate_count} immediate-priority item(s) and {high_risk_count} high-risk update(s), "
+        f"with the strongest concentration around {top_topic.lower()}."
+    )
+
+    if client_type == "Exporter":
+        operational_focus = "Border-facing documentation, destination-market compliance, and supplier risk visibility should be reviewed first."
+    elif client_type == "Retailer":
+        operational_focus = "Shelf compliance, supplier coordination, and consumer-facing risk exposure should be reviewed first."
+    elif client_type == "Importer":
+        operational_focus = "Inbound controls, traceability completeness, and batch-level documentation should be reviewed first."
+    elif client_type == "Startup":
+        operational_focus = "Packaging assumptions, market-entry timing, and regulatory readiness should be reviewed first."
+    else:
+        operational_focus = "Internal QA, compliance review, and product documentation should be reviewed first."
+
+    key_risk = f"The highest-impact update right now is: {top_row.get('title', 'Untitled')}."
+    recommended_next_step = f"Start with the top-priority item, align the affected team, and convert the alert into a short internal action note."
+
+    return {
+        "headline": headline,
+        "key_risk": key_risk,
+        "operational_focus": operational_focus,
+        "recommended_next_step": recommended_next_step
+    }
+
+
+# ---------- APP ----------
 ensure_data_dir()
 df = combine_data()
 
@@ -754,7 +861,7 @@ st.markdown("""
         <div class="intro-title">Why it matters</div>
         <div class="intro-text">
             Regulatory information alone is not enough. What creates value is turning updates into action:
-            what matters, for whom, how urgently, and what should happen next.
+            what matters, for whom, how urgent, and what should happen next.
         </div>
     </div>
     <div class="intro-card">
@@ -787,6 +894,7 @@ if not filtered.empty:
     filtered["priority"] = filtered["impact_score"].apply(determine_priority)
     filtered["why_this_matters"] = filtered.apply(lambda row: why_this_matters(row, client_type), axis=1)
 
+# ---------- METRICS ----------
 c1, c2, c3, c4 = st.columns(4)
 
 with c1:
@@ -824,6 +932,19 @@ with c4:
     </div>
     """, unsafe_allow_html=True)
 
+# ---------- CLIENT-SPECIFIC INSIGHTS PANEL ----------
+st.markdown('<div class="section-title">Client-Specific Insights</div>', unsafe_allow_html=True)
+
+insights = generate_client_insights(filtered, client_type)
+
+st.markdown('<div class="insight-box">', unsafe_allow_html=True)
+st.markdown(f"**Headline**  \n{insights['headline']}")
+st.markdown(f"**Key Risk**  \n{insights['key_risk']}")
+st.markdown(f"**Operational Focus**  \n{insights['operational_focus']}")
+st.markdown(f"**Recommended Next Step**  \n{insights['recommended_next_step']}")
+st.markdown('</div>', unsafe_allow_html=True)
+
+# ---------- WEEKLY REPORT ----------
 st.markdown('<div class="section-title">Weekly Report Generator</div>', unsafe_allow_html=True)
 
 weekly_report_text = generate_weekly_report(filtered, client_type)
@@ -855,9 +976,38 @@ with report_col2:
         st.write("No updates available.")
     else:
         for _, row in top_preview.iterrows():
-            st.write(f"- **{row.get('title', 'Untitled')}** | Score: {row.get('impact_score', 0)}/10 | Priority: {row.get('priority', 'Monitor')}")
+            st.write(
+                f"- **{row.get('title', 'Untitled')}** | Score: {row.get('impact_score', 0)}/10 | Priority: {row.get('priority', 'Monitor')}"
+            )
     st.markdown('</div>', unsafe_allow_html=True)
 
+# ---------- FULL REPORT ----------
+st.markdown('<div class="section-title">Full Intelligence Report</div>', unsafe_allow_html=True)
+
+full_report_text = build_full_report(filtered, client_type)
+full_report_pdf = build_pdf_bytes("Full Intelligence Report", full_report_text)
+
+full_col1, full_col2 = st.columns(2)
+
+with full_col1:
+    st.download_button(
+        label="Download FULL Report (TXT)",
+        data=full_report_text,
+        file_name=f"full_regulatory_report_{sanitize_filename(client_type)}.txt",
+        mime="text/plain",
+        key="full-txt",
+    )
+
+with full_col2:
+    st.download_button(
+        label="Download FULL Report (PDF)",
+        data=full_report_pdf,
+        file_name=f"full_regulatory_report_{sanitize_filename(client_type)}.pdf",
+        mime="application/pdf",
+        key="full-pdf",
+    )
+
+# ---------- UPDATES ----------
 st.markdown('<div class="section-title">Latest Regulatory Updates</div>', unsafe_allow_html=True)
 
 for idx, row in filtered.iterrows():
@@ -921,7 +1071,10 @@ for idx, row in filtered.iterrows():
 
     alert_text = build_client_alert(enriched_row, client_type, score, priority, why_matters)
     safe_name = sanitize_filename(title)
-    pdf_bytes = build_pdf_bytes(f"Client Alert - {title}", alert_text)
+    pdf_bytes = build_pdf_bytes(
+        title=f"Client Alert - {title}",
+        content=alert_text,
+    )
 
     col1, col2, col3 = st.columns([1, 1, 1])
 
