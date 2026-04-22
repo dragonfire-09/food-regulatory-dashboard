@@ -26,11 +26,16 @@ DATA_DIR = Path("data")
 BASE_DATA_FILE = DATA_DIR / "regulatory_data.json"
 LIVE_DATA_FILE = DATA_DIR / "live_updates.json"
 
+OPENROUTER_MODELS = [
+    "openai/gpt-oss-120b:free",
+    "openai/gpt-oss-20b:free",
+]
 
-# ---------- OPTIONAL OPENAI ----------
-def get_openai_client():
+
+# ---------- OPENROUTER ----------
+def get_openrouter_client():
     try:
-        api_key = st.secrets.get("OPENAI_API_KEY", None)
+        api_key = st.secrets.get("OPENROUTER_API_KEY", None)
     except Exception:
         api_key = None
 
@@ -38,7 +43,10 @@ def get_openai_client():
         return None
 
     try:
-        return OpenAI(api_key=api_key)
+        return OpenAI(
+            base_url="https://openrouter.ai/api/v1",
+            api_key=api_key,
+        )
     except Exception:
         return None
 
@@ -557,7 +565,7 @@ Recommended Action:
 """
 
 
-# ---------- FALLBACK AI ----------
+# ---------- LOCAL FALLBACK ----------
 def local_ai_fallback(row, client_type):
     title = str(row.get("title", "Regulatory update"))
     topic = str(row.get("topic", "Food Safety"))
@@ -607,34 +615,43 @@ def local_ai_fallback(row, client_type):
     }
 
 
-# ---------- REAL OR FALLBACK AI ----------
+# ---------- OPENROUTER AI ----------
+def try_openrouter_model(client, model_name, prompt):
+    response = client.chat.completions.create(
+        model=model_name,
+        messages=[
+            {"role": "system", "content": "You are a food regulatory intelligence analyst."},
+            {"role": "user", "content": prompt},
+        ],
+        temperature=0.2,
+    )
+    return response.choices[0].message.content.strip()
+
+
 def generate_ai_analysis(row, client_type):
-    client = get_openai_client()
+    client = get_openrouter_client()
 
     if client is None:
         return local_ai_fallback(row, client_type)
 
-    try:
-        title = row.get("title", "")
-        source = row.get("source", "")
-        topic = row.get("topic", "")
-        jurisdiction = row.get("jurisdiction", "")
-        raw_text = row.get("raw_text", "")
-        existing_summary = row.get("ai_summary", "")
+    title = row.get("title", "")
+    source = row.get("source", "")
+    topic = row.get("topic", "")
+    jurisdiction = row.get("jurisdiction", "")
+    raw_text = row.get("raw_text", "")
+    existing_summary = row.get("ai_summary", "")
 
-        prompt = f"""
-You are a food regulatory intelligence analyst.
-
+    prompt = f"""
 Return STRICT JSON with these keys:
 - ai_summary
 - business_impact
 - recommended_action
 
-Context:
-- Client type: {client_type}
-- Focus on compliance, supply chain, commercial, and consulting implications.
-- Keep the tone concise and professional.
+Rules:
 - Output JSON only.
+- Keep each field concise and professional.
+- Focus on compliance, supply chain, commercial, and consulting implications.
+- Tailor the response to this client type: {client_type}
 
 Update:
 Title: {title}
@@ -645,22 +662,20 @@ Existing summary: {existing_summary}
 Raw text: {raw_text}
 """
 
-        response = client.responses.create(
-            model="gpt-4.1-mini",
-            input=prompt,
-        )
+    for model_name in OPENROUTER_MODELS:
+        try:
+            text = try_openrouter_model(client, model_name, prompt)
+            parsed = json.loads(text)
+            return {
+                "ai_summary": parsed.get("ai_summary", existing_summary or "No summary available."),
+                "business_impact": parsed.get("business_impact", "No business impact available."),
+                "recommended_action": parsed.get("recommended_action", "No recommended action available."),
+                "_model_used": model_name,
+            }
+        except Exception:
+            continue
 
-        text = response.output_text.strip()
-        parsed = json.loads(text)
-
-        return {
-            "ai_summary": parsed.get("ai_summary", existing_summary or "No summary available."),
-            "business_impact": parsed.get("business_impact", "No business impact available."),
-            "recommended_action": parsed.get("recommended_action", "No recommended action available."),
-        }
-
-    except Exception:
-        return local_ai_fallback(row, client_type)
+    return local_ai_fallback(row, client_type)
 
 
 # ---------- REPORTS ----------
@@ -736,7 +751,6 @@ def build_full_report(df, client_type):
     return "\n".join(lines)
 
 
-# ---------- CLIENT INSIGHTS ----------
 def generate_client_insights(df, client_type):
     if df.empty:
         return {
@@ -747,7 +761,6 @@ def generate_client_insights(df, client_type):
         }
 
     sorted_df = df.sort_values("impact_score", ascending=False)
-
     top_row = sorted_df.iloc[0]
     top_topic = sorted_df["topic"].mode().iloc[0] if "topic" in sorted_df.columns and not sorted_df["topic"].mode().empty else "Food Safety"
 
@@ -772,7 +785,7 @@ def generate_client_insights(df, client_type):
         operational_focus = "Internal QA, compliance review, and product documentation should be reviewed first."
 
     key_risk = f"The highest-impact update right now is: {top_row.get('title', 'Untitled')}."
-    recommended_next_step = f"Start with the top-priority item, align the affected team, and convert the alert into a short internal action note."
+    recommended_next_step = "Start with the top-priority item, align the affected team, and convert the alert into a short internal action note."
 
     return {
         "headline": headline,
@@ -816,12 +829,13 @@ with st.sidebar:
         st.caption("No live refresh yet")
 
     try:
-        api_key_exists = bool(st.secrets.get("OPENAI_API_KEY", ""))
+        openrouter_exists = bool(st.secrets.get("OPENROUTER_API_KEY", ""))
     except Exception:
-        api_key_exists = False
+        openrouter_exists = False
 
-    if api_key_exists:
-        st.success("OpenAI connected")
+    if openrouter_exists:
+        st.success("OpenRouter connected")
+        st.caption(f"AI order: {OPENROUTER_MODELS[0]} → {OPENROUTER_MODELS[1]}")
     else:
         st.info("Using built-in local summarization mode")
 
@@ -843,7 +857,7 @@ st.markdown(f"""
         Decision-support layer for food law, compliance, traceability, and supply chain intelligence.
     </p>
     <p class="small-note">
-        Client mode: {client_type} | Live data sources: EFSA, RASFF | Prototype with consulting logic
+        Client mode: {client_type} | Live data sources: EFSA, RASFF | OpenRouter-ready free-model workflow
     </p>
 </div>
 """, unsafe_allow_html=True)
@@ -1018,10 +1032,12 @@ for idx, row in filtered.iterrows():
         ai_summary = cached["ai_summary"]
         business_impact = cached["business_impact"]
         recommended_action = cached["recommended_action"]
+        model_used = cached.get("_model_used", "local fallback")
     else:
         ai_summary = row.get("ai_summary", "No summary available.")
         business_impact = row.get("business_impact", "No impact analysis available.")
         recommended_action = row.get("recommended_action", "No recommended action available.")
+        model_used = "initial data"
 
     title = row.get("title", "Untitled")
     source = row.get("source", "Unknown")
@@ -1059,6 +1075,8 @@ for idx, row in filtered.iterrows():
         <div class="subblock-text">{business_impact}</div>
         <div class="subblock-title">Recommended Action</div>
         <div class="subblock-text">{adjusted_action}</div>
+        <div class="subblock-title">Model Used</div>
+        <div class="subblock-text">{model_used}</div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -1109,4 +1127,4 @@ for idx, row in filtered.iterrows():
     with st.expander("Show raw text"):
         st.write(raw_text if raw_text else "No raw text available.")
 
-st.caption("Prototype for regulatory horizon scanning, client-specific intelligence, consulting outputs, and report generation.")
+st.caption("Prototype for regulatory horizon scanning, client-specific intelligence, consulting outputs, and OpenRouter-based free-model enrichment.")
