@@ -18,7 +18,7 @@ BASE_DATA_FILE = DATA_DIR / "regulatory_data.json"
 LIVE_DATA_FILE = DATA_DIR / "live_updates.json"
 
 
-# ---------- STYLES ----------
+# ---------- CUSTOM CSS ----------
 st.markdown("""
 <style>
     .main {
@@ -32,29 +32,37 @@ st.markdown("""
     }
 
     .hero-box {
-        background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-        padding: 1.5rem 1.5rem 1.2rem 1.5rem;
-        border-radius: 18px;
+        background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%);
+        padding: 1.6rem 1.6rem 1.3rem 1.6rem;
+        border-radius: 20px;
         color: white;
-        margin-bottom: 1.2rem;
-        box-shadow: 0 10px 30px rgba(15, 23, 42, 0.15);
+        margin-bottom: 1.3rem;
+        box-shadow: 0 12px 32px rgba(15, 23, 42, 0.18);
     }
 
     .hero-title {
         font-size: 2rem;
-        font-weight: 700;
-        margin-bottom: 0.2rem;
+        font-weight: 800;
+        margin-bottom: 0.25rem;
+        line-height: 1.2;
     }
 
     .hero-subtitle {
         font-size: 1rem;
+        color: #dbeafe;
+        margin-bottom: 0.45rem;
+        line-height: 1.5;
+    }
+
+    .small-note {
+        font-size: 0.84rem;
         color: #cbd5e1;
         margin-bottom: 0;
     }
 
     .metric-card {
         background: white;
-        border-radius: 16px;
+        border-radius: 18px;
         padding: 1rem 1.1rem;
         box-shadow: 0 4px 16px rgba(15, 23, 42, 0.06);
         border: 1px solid #e5e7eb;
@@ -62,28 +70,28 @@ st.markdown("""
     }
 
     .metric-label {
-        font-size: 0.85rem;
+        font-size: 0.88rem;
         color: #64748b;
         margin-bottom: 0.15rem;
     }
 
     .metric-value {
-        font-size: 1.5rem;
-        font-weight: 700;
+        font-size: 1.7rem;
+        font-weight: 800;
         color: #0f172a;
     }
 
     .section-title {
-        font-size: 1.1rem;
-        font-weight: 700;
+        font-size: 1.15rem;
+        font-weight: 800;
         color: #0f172a;
-        margin-top: 1.2rem;
-        margin-bottom: 0.8rem;
+        margin-top: 1.1rem;
+        margin-bottom: 0.9rem;
     }
 
     .update-card {
         background: white;
-        border-radius: 18px;
+        border-radius: 20px;
         padding: 1.2rem 1.2rem 1rem 1.2rem;
         box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
         border: 1px solid #e5e7eb;
@@ -91,26 +99,27 @@ st.markdown("""
     }
 
     .update-title {
-        font-size: 1.15rem;
-        font-weight: 700;
+        font-size: 1.18rem;
+        font-weight: 800;
         color: #0f172a;
-        margin-bottom: 0.45rem;
+        margin-bottom: 0.5rem;
+        line-height: 1.35;
     }
 
     .meta-row {
-        font-size: 0.88rem;
+        font-size: 0.9rem;
         color: #64748b;
-        margin-bottom: 0.8rem;
+        margin-bottom: 0.85rem;
     }
 
     .pill {
         display: inline-block;
-        padding: 0.28rem 0.65rem;
+        padding: 0.30rem 0.70rem;
         border-radius: 999px;
         font-size: 0.78rem;
-        font-weight: 600;
-        margin-right: 0.4rem;
-        margin-bottom: 0.35rem;
+        font-weight: 700;
+        margin-right: 0.42rem;
+        margin-bottom: 0.4rem;
     }
 
     .pill-topic {
@@ -139,22 +148,29 @@ st.markdown("""
     }
 
     .subblock-title {
-        font-size: 0.9rem;
-        font-weight: 700;
+        font-size: 0.92rem;
+        font-weight: 800;
         color: #334155;
-        margin-top: 0.75rem;
+        margin-top: 0.85rem;
         margin-bottom: 0.2rem;
     }
 
     .subblock-text {
-        font-size: 0.95rem;
+        font-size: 0.97rem;
         color: #0f172a;
-        line-height: 1.55;
+        line-height: 1.58;
     }
 
-    .small-note {
-        font-size: 0.82rem;
-        color: #64748b;
+    .high-risk {
+        border-left: 6px solid #dc2626 !important;
+    }
+
+    .medium-risk {
+        border-left: 6px solid #f97316 !important;
+    }
+
+    .low-risk {
+        border-left: 6px solid #16a34a !important;
     }
 
     .stButton button {
@@ -162,7 +178,7 @@ st.markdown("""
         border: 1px solid #dbeafe;
         background: white;
         color: #0f172a;
-        font-weight: 600;
+        font-weight: 700;
     }
 
     .stSidebar {
@@ -172,7 +188,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
-# ---------- DATA HELPERS ----------
+# ---------- HELPERS ----------
 def ensure_data_dir():
     DATA_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -193,17 +209,17 @@ def save_json_records(path: Path, records):
 
 
 def refresh_live_data():
-    efsa = fetch_efsa_updates()
-    rasff = fetch_rasff_updates()
-    live = efsa + rasff
-    save_json_records(LIVE_DATA_FILE, live)
-    return live
+    efsa_items = fetch_efsa_updates()
+    rasff_items = fetch_rasff_updates()
+    live_items = efsa_items + rasff_items
+    save_json_records(LIVE_DATA_FILE, live_items)
+    return live_items
 
 
 def combine_data():
-    base = load_json_records(BASE_DATA_FILE)
-    live = load_json_records(LIVE_DATA_FILE)
-    all_records = live + base
+    base_records = load_json_records(BASE_DATA_FILE)
+    live_records = load_json_records(LIVE_DATA_FILE)
+    all_records = live_records + base_records
 
     if not all_records:
         return pd.DataFrame()
@@ -225,6 +241,15 @@ def risk_class(level: str):
     return "pill pill-risk-low", "Low"
 
 
+def card_risk_class(level: str):
+    level = str(level).strip().lower()
+    if level == "high":
+        return "high-risk"
+    if level == "medium":
+        return "medium-risk"
+    return "low-risk"
+
+
 def format_date(value):
     if pd.isna(value):
         return "Unknown date"
@@ -234,16 +259,39 @@ def format_date(value):
         return str(value)
 
 
+def build_client_alert(row):
+    title = row.get("title", "Regulatory Update")
+    ai_summary = row.get("ai_summary", "No summary available.")
+    impact = row.get("business_impact", "No business impact available.")
+    action = row.get("recommended_action", "No recommended action available.")
+    source = row.get("source", "Unknown source")
+    date_str = format_date(row.get("date", None))
+
+    return f"""Subject: Regulatory Update – {title}
+
+Source: {source}
+Date: {date_str}
+
+Summary:
+{ai_summary}
+
+Business Impact:
+{impact}
+
+Recommended Action:
+{action}
+"""
+
+
 # ---------- APP ----------
 ensure_data_dir()
-
 df = combine_data()
 
 with st.sidebar:
     st.markdown("## Filters")
 
     if st.button("🔄 Refresh Live Data", use_container_width=True):
-        with st.spinner("Fetching live updates..."):
+        with st.spinner("Fetching live updates from EFSA and RASFF..."):
             try:
                 refresh_live_data()
                 st.success("Live data refreshed.")
@@ -272,7 +320,10 @@ st.markdown("""
 <div class="hero-box">
     <div class="hero-title">Food Regulatory Intelligence Dashboard</div>
     <p class="hero-subtitle">
-        Live regulatory monitoring prototype combining EFSA, RASFF, and structured intelligence outputs.
+        AI-powered regulatory monitoring for food law, compliance, and supply chain intelligence.
+    </p>
+    <p class="small-note">
+        Live data sources: EFSA, RASFF | Prototype v1
     </p>
 </div>
 """, unsafe_allow_html=True)
@@ -334,7 +385,8 @@ with c4:
 
 st.markdown('<div class="section-title">Latest Regulatory Updates</div>', unsafe_allow_html=True)
 
-for _, row in filtered.iterrows():
+for idx, row in filtered.iterrows():
+    row_id = row.get("id", f"row-{idx}")
     title = row.get("title", "Untitled")
     source = row.get("source", "Unknown")
     date_str = format_date(row.get("date", None))
@@ -346,9 +398,10 @@ for _, row in filtered.iterrows():
     raw_text = row.get("raw_text", "")
     url = row.get("url", "")
     risk_css, risk_label = risk_class(row.get("risk_level", "Low"))
+    extra_class = card_risk_class(row.get("risk_level", "Low"))
 
     st.markdown(f"""
-    <div class="update-card">
+    <div class="update-card {extra_class}">
         <div class="update-title">{title}</div>
         <div class="meta-row">Source: {source} | Date: {date_str} | Jurisdiction: {jurisdiction}</div>
         <div>
@@ -365,10 +418,17 @@ for _, row in filtered.iterrows():
     </div>
     """, unsafe_allow_html=True)
 
+    button_col1, button_col2 = st.columns([1, 1])
+
+    with button_col1:
+        if st.button(f"Generate Client Alert", key=f"alert-{row_id}"):
+            st.info(build_client_alert(row))
+
+    with button_col2:
+        if url:
+            st.markdown(f"[Open source item]({url})")
+
     with st.expander("Show raw text"):
         st.write(raw_text if raw_text else "No raw text available.")
-
-    if url:
-        st.markdown(f"[Open source item]({url})")
 
 st.caption("Prototype for regulatory horizon scanning, compliance monitoring, and structured client intelligence.")
