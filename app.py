@@ -1,11 +1,11 @@
-import streamlit as st
-import pandas as pd
 import json
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 from io import BytesIO
 
+import pandas as pd
 import plotly.express as px
+import streamlit as st
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 
@@ -31,6 +31,8 @@ OPENROUTER_MODELS = [
     "openai/gpt-oss-120b:free",
     "openai/gpt-oss-20b:free",
 ]
+
+AUTO_REFRESH_MINUTES = 60
 
 
 # ---------- OPENROUTER ----------
@@ -377,6 +379,21 @@ def refresh_live_data():
     return live_items
 
 
+def ensure_metadata_fields(df: pd.DataFrame) -> pd.DataFrame:
+    required_defaults = {
+        "source_status": "unknown",
+        "fetch_method": "n/a",
+        "notification_reference": "n/a",
+        "last_verified": "n/a",
+    }
+
+    for field, default in required_defaults.items():
+        if field not in df.columns:
+            df[field] = default
+
+    return df
+
+
 def combine_data():
     base_records = load_json_records(BASE_DATA_FILE)
     live_records = load_json_records(LIVE_DATA_FILE)
@@ -386,11 +403,62 @@ def combine_data():
         return pd.DataFrame()
 
     df = pd.DataFrame(all_records)
+    df = ensure_metadata_fields(df)
 
     if "date" in df.columns:
         df["date"] = pd.to_datetime(df["date"], errors="coerce")
 
     return df.sort_values("date", ascending=False, na_position="last")
+
+
+def file_last_updated(path: Path):
+    if not path.exists():
+        return None
+    try:
+        return datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc)
+    except Exception:
+        return None
+
+
+def minutes_since_update(path: Path):
+    updated = file_last_updated(path)
+    if updated is None:
+        return None
+    now = datetime.now(timezone.utc)
+    return int((now - updated).total_seconds() // 60)
+
+
+def format_relative_update_time(path: Path):
+    mins = minutes_since_update(path)
+    if mins is None:
+        return "never"
+
+    if mins < 1:
+        return "just now"
+    if mins == 1:
+        return "1 minute ago"
+    if mins < 60:
+        return f"{mins} minutes ago"
+
+    hours = mins // 60
+    if hours == 1:
+        return "1 hour ago"
+    if hours < 24:
+        return f"{hours} hours ago"
+
+    days = hours // 24
+    if days == 1:
+        return "1 day ago"
+    return f"{days} days ago"
+
+
+def should_auto_refresh(path: Path, max_age_minutes: int):
+    if not path.exists():
+        return True
+    mins = minutes_since_update(path)
+    if mins is None:
+        return True
+    return mins >= max_age_minutes
 
 
 # ---------- DISPLAY HELPERS ----------
@@ -428,6 +496,16 @@ def source_status_badge(status: str):
     if status == "fallback":
         return "🟠 Fallback"
     return "⚪ Unknown"
+
+
+def safe_value(val, default="n/a"):
+    if val is None:
+        return default
+    if isinstance(val, float) and pd.isna(val):
+        return default
+    if str(val).lower() in ["nan", "none", ""]:
+        return default
+    return val
 
 
 def format_date(value):
@@ -1233,10 +1311,10 @@ def render_updates(filtered, client_type):
         why_matters = row.get("why_this_matters", "")
         priority_css = priority_class(priority)
 
-        source_status = row.get("source_status", "unknown")
-        fetch_method = row.get("fetch_method", "n/a")
-        notification_reference = row.get("notification_reference", "n/a")
-        last_verified = row.get("last_verified", "n/a")
+        source_status = safe_value(row.get("source_status"), "unknown")
+        fetch_method = safe_value(row.get("fetch_method"), "n/a")
+        notification_reference = safe_value(row.get("notification_reference"), "n/a")
+        last_verified = safe_value(row.get("last_verified"), "n/a")
         status_badge = source_status_badge(source_status)
 
         adjusted_action = client_adjusted_action(recommended_action, client_type, topic, priority)
@@ -1316,10 +1394,24 @@ def render_updates(filtered, client_type):
             st.write(raw_text if raw_text else "No raw text available.")
 
 
-# ---------- APP ----------
+# ---------- AUTO REFRESH ON LOAD ----------
 ensure_data_dir()
+
+auto_refresh_triggered = False
+auto_refresh_message = None
+
+if should_auto_refresh(LIVE_DATA_FILE, AUTO_REFRESH_MINUTES):
+    try:
+        refresh_live_data()
+        auto_refresh_triggered = True
+        auto_refresh_message = f"Auto-refresh completed. Policy: refresh on app load if data is older than {AUTO_REFRESH_MINUTES} minutes."
+    except Exception:
+        auto_refresh_message = "Auto-refresh was attempted but failed. Existing data is being shown if available."
+
 df = combine_data()
 
+
+# ---------- APP ----------
 with st.sidebar:
     st.markdown("## Controls")
 
@@ -1348,11 +1440,9 @@ with st.sidebar:
             except Exception as e:
                 st.error(f"Refresh failed: {e}")
 
-    if LIVE_DATA_FILE.exists():
-        ts = datetime.fromtimestamp(LIVE_DATA_FILE.stat().st_mtime).strftime("%Y-%m-%d %H:%M:%S")
-        st.caption(f"Last refresh: {ts}")
-    else:
-        st.caption("No live refresh yet")
+    last_updated_relative = format_relative_update_time(LIVE_DATA_FILE)
+    st.caption(f"Last updated: {last_updated_relative}")
+    st.caption(f"Auto-refresh policy: on app load if older than {AUTO_REFRESH_MINUTES} minutes")
 
     try:
         openrouter_exists = bool(st.secrets.get("OPENROUTER_API_KEY", ""))
@@ -1387,10 +1477,16 @@ st.markdown(f"""
         Designed to turn regulatory updates into client-facing consulting outputs.
     </p>
     <p class="small-note">
-        Client mode: {client_type} | View: {view_mode} | Live data sources: EFSA, RASFF | OpenRouter-ready
+        Client mode: {client_type} | View: {view_mode} | Last updated: {last_updated_relative} | Auto-refresh threshold: {AUTO_REFRESH_MINUTES} min
     </p>
 </div>
 """, unsafe_allow_html=True)
+
+if auto_refresh_message:
+    if auto_refresh_triggered:
+        st.success(auto_refresh_message)
+    else:
+        st.warning(auto_refresh_message)
 
 render_client_strip(client_type)
 
@@ -1421,7 +1517,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 if df.empty:
-    st.warning("No data found. Add `data/regulatory_data.json` or refresh live data.")
+    st.warning("No data found. Click Refresh Live Data or check your data sources.")
     st.stop()
 
 filtered = df.copy()
