@@ -287,6 +287,21 @@ st.markdown("""
         color: #1d4ed8;
     }
 
+    .pill-confidence-high {
+        background: #dcfce7;
+        color: #166534;
+    }
+
+    .pill-confidence-medium {
+        background: #fef3c7;
+        color: #92400e;
+    }
+
+    .pill-confidence-low {
+        background: #fee2e2;
+        color: #991b1b;
+    }
+
     .subblock-title {
         font-size: 0.92rem;
         font-weight: 800;
@@ -329,6 +344,30 @@ st.markdown("""
         border: 1px solid #e5e7eb;
         box-shadow: 0 4px 16px rgba(15, 23, 42, 0.05);
         margin-bottom: 1rem;
+    }
+
+    .data-badge {
+        display: inline-block;
+        padding: 6px 12px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 700;
+        margin-bottom: 10px;
+    }
+
+    .badge-live {
+        background: rgba(16, 185, 129, 0.15);
+        color: #059669;
+    }
+
+    .badge-fallback {
+        background: rgba(245, 158, 11, 0.15);
+        color: #b45309;
+    }
+
+    .badge-unknown {
+        background: rgba(156, 163, 175, 0.15);
+        color: #6b7280;
     }
 
     .stButton button {
@@ -385,6 +424,7 @@ def ensure_metadata_fields(df: pd.DataFrame) -> pd.DataFrame:
         "fetch_method": "n/a",
         "notification_reference": "n/a",
         "last_verified": "n/a",
+        "jurisdiction": "Unknown",
     }
 
     for field, default in required_defaults.items():
@@ -404,6 +444,11 @@ def combine_data():
 
     df = pd.DataFrame(all_records)
     df = ensure_metadata_fields(df)
+
+    # duplicate merge by title+source+date where possible
+    dedupe_cols = [c for c in ["title", "source", "date"] if c in df.columns]
+    if dedupe_cols:
+        df = df.drop_duplicates(subset=dedupe_cols, keep="first")
 
     if "date" in df.columns:
         df["date"] = pd.to_datetime(df["date"], errors="coerce")
@@ -432,20 +477,17 @@ def format_relative_update_time(path: Path):
     mins = minutes_since_update(path)
     if mins is None:
         return "never"
-
     if mins < 1:
         return "just now"
     if mins == 1:
         return "1 minute ago"
     if mins < 60:
         return f"{mins} minutes ago"
-
     hours = mins // 60
     if hours == 1:
         return "1 hour ago"
     if hours < 24:
         return f"{hours} hours ago"
-
     days = hours // 24
     if days == 1:
         return "1 day ago"
@@ -487,6 +529,14 @@ def priority_class(priority: str):
     if p == "review":
         return "pill pill-priority-review"
     return "pill pill-priority-monitor"
+
+
+def confidence_class(score: int):
+    if score >= 85:
+        return "pill pill-confidence-high"
+    if score >= 60:
+        return "pill pill-confidence-medium"
+    return "pill pill-confidence-low"
 
 
 def source_status_badge(status: str):
@@ -569,6 +619,31 @@ def sanitize_filename(value: str) -> str:
         value = value.replace(ch, "-")
     value = value.replace(" ", "_")
     return value[:80]
+
+
+def build_data_badge_html(source_status: str):
+    status = str(source_status).lower()
+    if status == "live":
+        return '<div class="data-badge badge-live">🟢 LIVE DATA</div>'
+    if status == "fallback":
+        return '<div class="data-badge badge-fallback">🟠 FALLBACK DATA</div>'
+    return '<div class="data-badge badge-unknown">⚪ UNKNOWN</div>'
+
+
+def calculate_confidence_score(row):
+    status = str(safe_value(row.get("source_status"), "unknown")).lower()
+    method = str(safe_value(row.get("fetch_method"), "n/a")).lower()
+    reference = str(safe_value(row.get("notification_reference"), "n/a")).lower()
+
+    if status == "live" and method == "detail_page" and reference != "n/a":
+        return 95
+    if status == "live" and method == "rss_feed":
+        return 85
+    if status == "live":
+        return 75
+    if status == "fallback":
+        return 45
+    return 55
 
 
 # ---------- CONSULTING LOGIC ----------
@@ -809,12 +884,12 @@ def generate_ai_analysis(row, client_type):
     if client is None:
         return local_ai_fallback(row, client_type)
 
-    title = row.get("title", "")
-    source = row.get("source", "")
-    topic = row.get("topic", "")
-    jurisdiction = row.get("jurisdiction", "")
-    raw_text = row.get("raw_text", "")
-    existing_summary = row.get("ai_summary", "")
+    title = safe_value(row.get("title"), "")
+    source = safe_value(row.get("source"), "")
+    topic = safe_value(row.get("topic"), "")
+    jurisdiction = safe_value(row.get("jurisdiction"), "")
+    raw_text = safe_value(row.get("raw_text"), "")
+    existing_summary = safe_value(row.get("ai_summary"), "")
 
     prompt = f"""
 You are a food regulatory intelligence analyst.
@@ -1010,6 +1085,10 @@ def build_analytics_frames(df):
         frames["risk_counts"] = work["risk_level"].astype(str).str.title().value_counts().reset_index()
         frames["risk_counts"].columns = ["risk_level", "count"]
 
+    if "source_status" in work.columns:
+        frames["status_counts"] = work["source_status"].astype(str).str.title().value_counts().reset_index()
+        frames["status_counts"].columns = ["source_status", "count"]
+
     if "date_only" in work.columns:
         trend = work.groupby("date_only").size().reset_index(name="count")
         trend["date_only"] = pd.to_datetime(trend["date_only"])
@@ -1020,9 +1099,10 @@ def build_analytics_frames(df):
         frames["score_by_topic"]["impact_score"] = frames["score_by_topic"]["impact_score"].round(2)
         frames["score_by_topic"] = frames["score_by_topic"].sort_values("impact_score", ascending=False)
 
-        frames["score_by_source"] = work.groupby("source", dropna=False)["impact_score"].mean().reset_index()
-        frames["score_by_source"]["impact_score"] = frames["score_by_source"]["impact_score"].round(2)
-        frames["score_by_source"] = frames["score_by_source"].sort_values("impact_score", ascending=False)
+    if "confidence_score" in work.columns:
+        frames["confidence_by_source"] = work.groupby("source", dropna=False)["confidence_score"].mean().reset_index()
+        frames["confidence_by_source"]["confidence_score"] = frames["confidence_by_source"]["confidence_score"].round(2)
+        frames["confidence_by_source"] = frames["confidence_by_source"].sort_values("confidence_score", ascending=False)
 
     return frames
 
@@ -1056,6 +1136,10 @@ def render_analytics_section(df):
         fig_risk = px.bar(frames["risk_counts"], x="risk_level", y="count", title="Risk Distribution")
         c4.plotly_chart(fig_risk, use_container_width=True)
 
+    if "status_counts" in frames:
+        fig_status = px.bar(frames["status_counts"], x="source_status", y="count", title="Data Status Distribution")
+        st.plotly_chart(fig_status, use_container_width=True)
+
     if "trend" in frames and not frames["trend"].empty:
         fig_trend = px.line(frames["trend"], x="date_only", y="count", markers=True, title="Update Volume Over Time")
         st.plotly_chart(fig_trend, use_container_width=True)
@@ -1066,9 +1150,9 @@ def render_analytics_section(df):
         fig_score_topic = px.bar(frames["score_by_topic"], x="topic", y="impact_score", title="Average Impact Score by Topic")
         c5.plotly_chart(fig_score_topic, use_container_width=True)
 
-    if "score_by_source" in frames:
-        fig_score_source = px.bar(frames["score_by_source"], x="source", y="impact_score", title="Average Impact Score by Source")
-        c6.plotly_chart(fig_score_source, use_container_width=True)
+    if "confidence_by_source" in frames:
+        fig_conf_source = px.bar(frames["confidence_by_source"], x="source", y="confidence_score", title="Average Confidence by Source")
+        c6.plotly_chart(fig_conf_source, use_container_width=True)
 
 
 # ---------- SEARCH ----------
@@ -1125,18 +1209,20 @@ def render_top_3_urgent_items(filtered):
         st.info("No urgent items available.")
         return
 
-    urgent = filtered.sort_values(["impact_score"], ascending=False).head(3)
+    urgent = filtered.sort_values(["impact_score", "confidence_score"], ascending=False).head(3)
 
     cols = st.columns(3)
     for i, (_, row) in enumerate(urgent.iterrows()):
         with cols[i]:
             priority_css = priority_class(row.get("priority", "Monitor"))
+            confidence_css = confidence_class(int(row.get("confidence_score", 0)))
             st.markdown(f"""
             <div class="urgent-card">
                 <div class="urgent-title">{row.get('title', 'Untitled')}</div>
                 <div class="urgent-meta">Source: {row.get('source', 'Unknown')} | Date: {format_date(row.get('date'))}</div>
                 <span class="{priority_css}">{row.get('priority', 'Monitor')}</span>
                 <span class="pill pill-topic">{row.get('topic', 'Unknown')}</span>
+                <span class="{confidence_css}">Confidence {int(row.get('confidence_score', 0))}</span>
                 <div class="subblock-title">Why this matters</div>
                 <div class="subblock-text">{row.get('why_this_matters', '')}</div>
             </div>
@@ -1144,7 +1230,7 @@ def render_top_3_urgent_items(filtered):
 
 
 def render_overview(filtered, client_type):
-    c1, c2, c3, c4 = st.columns(4)
+    c1, c2, c3, c4, c5 = st.columns(5)
 
     with c1:
         st.markdown(f"""
@@ -1173,6 +1259,15 @@ def render_overview(filtered, client_type):
         """, unsafe_allow_html=True)
 
     with c4:
+        avg_conf = round(filtered["confidence_score"].mean(), 1) if not filtered.empty else 0
+        st.markdown(f"""
+        <div class="metric-card">
+            <div class="metric-label">Avg. Confidence</div>
+            <div class="metric-value">{avg_conf}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with c5:
         topic_count = filtered["topic"].nunique() if "topic" in filtered.columns and not filtered.empty else 0
         st.markdown(f"""
         <div class="metric-card">
@@ -1195,14 +1290,14 @@ def render_overview(filtered, client_type):
 
     st.markdown('<div class="section-title">Executive Summary Preview</div>', unsafe_allow_html=True)
 
-    top_preview = filtered.sort_values("impact_score", ascending=False).head(3) if not filtered.empty else pd.DataFrame()
+    top_preview = filtered.sort_values(["impact_score", "confidence_score"], ascending=False).head(3) if not filtered.empty else pd.DataFrame()
     st.markdown('<div class="report-box">', unsafe_allow_html=True)
     if top_preview.empty:
         st.write("No updates available.")
     else:
         for _, row in top_preview.iterrows():
             st.write(
-                f"- **{row.get('title', 'Untitled')}** | Score: {row.get('impact_score', 0)}/10 | Priority: {row.get('priority', 'Monitor')}"
+                f"- **{row.get('title', 'Untitled')}** | Score: {row.get('impact_score', 0)}/10 | Priority: {row.get('priority', 'Monitor')} | Confidence: {int(row.get('confidence_score', 0))}"
             )
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -1232,7 +1327,7 @@ def render_reports(filtered, client_type):
         )
 
     with report_col2:
-        top_preview = filtered.sort_values("impact_score", ascending=False).head(3) if not filtered.empty else pd.DataFrame()
+        top_preview = filtered.sort_values(["impact_score", "confidence_score"], ascending=False).head(3) if not filtered.empty else pd.DataFrame()
         st.markdown('<div class="report-box">', unsafe_allow_html=True)
         st.markdown("**Executive Summary Preview**")
         if top_preview.empty:
@@ -1240,7 +1335,7 @@ def render_reports(filtered, client_type):
         else:
             for _, row in top_preview.iterrows():
                 st.write(
-                    f"- **{row.get('title', 'Untitled')}** | Score: {row.get('impact_score', 0)}/10 | Priority: {row.get('priority', 'Monitor')}"
+                    f"- **{row.get('title', 'Untitled')}** | Score: {row.get('impact_score', 0)}/10 | Priority: {row.get('priority', 'Monitor')} | Confidence: {int(row.get('confidence_score', 0))}"
                 )
         st.markdown('</div>', unsafe_allow_html=True)
 
@@ -1292,9 +1387,9 @@ def render_updates(filtered, client_type):
             recommended_action = cached["recommended_action"]
             model_used = cached.get("_model_used", "local fallback")
         else:
-            ai_summary = row.get("ai_summary", "No summary available.")
-            business_impact = row.get("business_impact", "No impact analysis available.")
-            recommended_action = row.get("recommended_action", "No recommended action available.")
+            ai_summary = safe_value(row.get("ai_summary"), "No summary available.")
+            business_impact = safe_value(row.get("business_impact"), "No impact analysis available.")
+            recommended_action = safe_value(row.get("recommended_action"), "No recommended action available.")
             model_used = "initial data"
 
         title = safe_value(row.get("title"), "Untitled")
@@ -1302,8 +1397,8 @@ def render_updates(filtered, client_type):
         date_str = format_date(row.get("date", None))
         topic = safe_value(row.get("topic"), "Unknown")
         jurisdiction = safe_value(row.get("jurisdiction"), "Unknown")
-        raw_text = row.get("raw_text", "")
-        url = row.get("url", "")
+        raw_text = safe_value(row.get("raw_text"), "")
+        url = safe_value(row.get("url"), "")
         risk_css, risk_label = risk_class(row.get("risk_level", "Low"))
         extra_class = card_risk_class(row.get("risk_level", "Low"))
         score = row.get("impact_score", 0)
@@ -1315,12 +1410,17 @@ def render_updates(filtered, client_type):
         fetch_method = safe_value(row.get("fetch_method"), "n/a")
         notification_reference = safe_value(row.get("notification_reference"), "n/a")
         last_verified = safe_value(row.get("last_verified"), "n/a")
+        confidence_score = int(row.get("confidence_score", 0))
+
         status_badge = source_status_badge(source_status)
+        confidence_css = confidence_class(confidence_score)
+        data_badge_html = build_data_badge_html(source_status)
 
         adjusted_action = client_adjusted_action(recommended_action, client_type, topic, priority)
 
         st.markdown(f"""
         <div class="update-card {extra_class}">
+            {data_badge_html}
             <div class="update-title">{title}</div>
             <div class="meta-row">Source: {source} | Date: {date_str} | Jurisdiction: {jurisdiction}</div>
             <div class="meta-row">Status: {status_badge} | Fetch Method: {fetch_method} | Reference: {notification_reference}</div>
@@ -1330,6 +1430,7 @@ def render_updates(filtered, client_type):
                 <span class="pill pill-topic">{topic}</span>
                 <span class="{risk_css}">{risk_label} Risk</span>
                 <span class="{priority_css}">{priority}</span>
+                <span class="{confidence_css}">Confidence {confidence_score}</span>
             </div>
             <div class="subblock-title">Impact Score</div>
             <div class="subblock-text">{score}/10</div>
@@ -1410,6 +1511,9 @@ if should_auto_refresh(LIVE_DATA_FILE, AUTO_REFRESH_MINUTES):
 
 df = combine_data()
 
+if not df.empty:
+    df["confidence_score"] = df.apply(calculate_confidence_score, axis=1)
+
 
 # ---------- APP ----------
 with st.sidebar:
@@ -1461,12 +1565,25 @@ with st.sidebar:
         source_options = sorted(df["source"].dropna().astype(str).unique().tolist()) if "source" in df.columns else []
         topic_options = sorted(df["topic"].dropna().astype(str).unique().tolist()) if "topic" in df.columns else []
         risk_options = sorted(df["risk_level"].dropna().astype(str).unique().tolist()) if "risk_level" in df.columns else []
+        status_options = sorted(df["source_status"].dropna().astype(str).unique().tolist()) if "source_status" in df.columns else []
+        priority_options = sorted(df["priority"].dropna().astype(str).unique().tolist()) if "priority" in df.columns else []
 
         selected_sources = st.multiselect("Source", source_options, default=source_options)
         selected_topics = st.multiselect("Topic", topic_options, default=topic_options)
         selected_risks = st.multiselect("Risk level", risk_options, default=risk_options)
+
+        data_mode = st.radio(
+            "Data Mode",
+            ["All", "Live Only", "Fallback Only"]
+        )
+
+        selected_priorities = st.multiselect("Priority", priority_options, default=priority_options)
+        min_confidence = st.slider("Minimum Confidence Score", min_value=0, max_value=100, value=0, step=5)
     else:
         selected_sources, selected_topics, selected_risks = [], [], []
+        selected_priorities = []
+        data_mode = "All"
+        min_confidence = 0
 
 st.markdown(f"""
 <div class="hero-box">
@@ -1531,6 +1648,17 @@ if selected_topics and "topic" in filtered.columns:
 if selected_risks and "risk_level" in filtered.columns:
     filtered = filtered[filtered["risk_level"].isin(selected_risks)]
 
+if selected_priorities and "priority" in filtered.columns:
+    filtered = filtered[filtered["priority"].isin(selected_priorities)]
+
+if data_mode == "Live Only" and "source_status" in filtered.columns:
+    filtered = filtered[filtered["source_status"].astype(str).str.lower() == "live"]
+elif data_mode == "Fallback Only" and "source_status" in filtered.columns:
+    filtered = filtered[filtered["source_status"].astype(str).str.lower() == "fallback"]
+
+if "confidence_score" in filtered.columns:
+    filtered = filtered[filtered["confidence_score"] >= min_confidence]
+
 if not filtered.empty:
     filtered["impact_score"] = filtered.apply(lambda row: calculate_impact_score(row, client_type), axis=1)
     filtered["priority"] = filtered["impact_score"].apply(determine_priority)
@@ -1545,4 +1673,4 @@ elif view_mode == "Reports":
 elif view_mode == "Updates":
     render_updates(filtered, client_type)
 
-st.caption("Prototype for regulatory horizon scanning, client-specific intelligence, consulting outputs, analytics, and OpenRouter-based free-model enrichment.")
+st.caption("Prototype for regulatory horizon scanning, client-specific intelligence, consulting outputs, analytics, and reliability-aware data filtering.")
