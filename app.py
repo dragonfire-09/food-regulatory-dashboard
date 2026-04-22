@@ -60,38 +60,77 @@ st.markdown("""
     }
 
     .block-container {
-        padding-top: 2rem;
+        padding-top: 1.8rem;
         padding-bottom: 2rem;
         max-width: 1280px;
     }
 
     .hero-box {
-        background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%);
-        padding: 1.6rem 1.6rem 1.3rem 1.6rem;
-        border-radius: 20px;
+        background: linear-gradient(135deg, #0b1220 0%, #132b63 55%, #1d4ed8 100%);
+        padding: 1.8rem 1.8rem 1.45rem 1.8rem;
+        border-radius: 24px;
         color: white;
-        margin-bottom: 1.3rem;
-        box-shadow: 0 12px 32px rgba(15, 23, 42, 0.18);
+        margin-bottom: 1.1rem;
+        box-shadow: 0 18px 40px rgba(15, 23, 42, 0.20);
+        border: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .hero-topline {
+        font-size: 0.78rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #bfdbfe;
+        margin-bottom: 0.55rem;
     }
 
     .hero-title {
-        font-size: 2rem;
+        font-size: 2.1rem;
         font-weight: 800;
-        margin-bottom: 0.25rem;
-        line-height: 1.2;
+        margin-bottom: 0.35rem;
+        line-height: 1.15;
+        color: #ffffff;
     }
 
     .hero-subtitle {
         font-size: 1rem;
         color: #dbeafe;
-        margin-bottom: 0.45rem;
-        line-height: 1.5;
+        margin-bottom: 0.55rem;
+        line-height: 1.55;
+        max-width: 900px;
     }
 
     .small-note {
         font-size: 0.84rem;
         color: #cbd5e1;
         margin-bottom: 0;
+    }
+
+    .client-strip {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-bottom: 1rem;
+    }
+
+    .client-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        background: white;
+        border: 1px solid #e5e7eb;
+        color: #334155;
+        border-radius: 999px;
+        padding: 0.55rem 0.9rem;
+        font-size: 0.86rem;
+        font-weight: 700;
+        box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04);
+    }
+
+    .client-chip-active {
+        background: linear-gradient(135deg, #dbeafe 0%, #eef2ff 100%);
+        border: 1px solid #93c5fd;
+        color: #1e3a8a;
     }
 
     .intro-grid {
@@ -970,8 +1009,26 @@ def apply_search(df, query: str):
     return df[mask]
 
 
+# ---------- PREMIUM HEADER / CLIENT STRIP ----------
+def render_client_strip(client_type):
+    client_labels = [
+        ("🏭", "SME Food Producer"),
+        ("🌍", "Exporter"),
+        ("🛒", "Retailer"),
+        ("🚀", "Startup"),
+        ("📦", "Importer"),
+    ]
+
+    chips = []
+    for icon, label in client_labels:
+        css = "client-chip client-chip-active" if label == client_type else "client-chip"
+        chips.append(f'<div class="{css}">{icon} {label}</div>')
+
+    st.markdown('<div class="client-strip">' + "".join(chips) + '</div>', unsafe_allow_html=True)
+
+
 # ---------- VIEW RENDERERS ----------
-def render_top_urgent_items(filtered):
+def render_top_3_urgent_items(filtered):
     st.markdown('<div class="section-title">Top 3 Urgent Items</div>', unsafe_allow_html=True)
 
     if filtered.empty:
@@ -1044,7 +1101,7 @@ def render_overview(filtered, client_type):
     st.markdown(f"**Recommended Next Step**  \n{insights['recommended_next_step']}")
     st.markdown('</div>', unsafe_allow_html=True)
 
-    render_top_urgent_items(filtered)
+    render_top_3_urgent_items(filtered)
 
     st.markdown('<div class="section-title">Executive Summary Preview</div>', unsafe_allow_html=True)
 
@@ -1303,15 +1360,19 @@ with st.sidebar:
 
 st.markdown(f"""
 <div class="hero-box">
+    <div class="hero-topline">Regulatory Intelligence Prototype</div>
     <div class="hero-title">Food Regulatory Intelligence Dashboard</div>
     <p class="hero-subtitle">
         Decision-support layer for food law, compliance, traceability, and supply chain intelligence.
+        Designed to turn regulatory updates into client-facing consulting outputs.
     </p>
     <p class="small-note">
         Client mode: {client_type} | View: {view_mode} | Live data sources: EFSA, RASFF | OpenRouter-ready
     </p>
 </div>
 """, unsafe_allow_html=True)
+
+render_client_strip(client_type)
 
 st.markdown("""
 <div class="intro-grid">
