@@ -1301,7 +1301,7 @@ def render_updates(filtered, client_type):
         source = row.get("source", "Unknown")
         date_str = format_date(row.get("date", None))
         topic = row.get("topic", "Unknown")
-        jurisdiction = row.get("jurisdiction", "Unknown")
+        jurisdiction = safe_value(row.get("jurisdiction"), "Unknown")
         raw_text = row.get("raw_text", "")
         url = row.get("url", "")
         risk_css, risk_label = risk_class(row.get("risk_level", "Low"))
