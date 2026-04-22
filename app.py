@@ -160,6 +160,28 @@ st.markdown("""
         margin-bottom: 1rem;
     }
 
+    .urgent-card {
+        background: white;
+        border-radius: 18px;
+        padding: 1rem 1rem 0.9rem 1rem;
+        border: 1px solid #e5e7eb;
+        box-shadow: 0 4px 16px rgba(15, 23, 42, 0.05);
+        margin-bottom: 0.8rem;
+    }
+
+    .urgent-title {
+        font-size: 1rem;
+        font-weight: 800;
+        color: #0f172a;
+        margin-bottom: 0.35rem;
+    }
+
+    .urgent-meta {
+        font-size: 0.85rem;
+        color: #64748b;
+        margin-bottom: 0.35rem;
+    }
+
     .update-title {
         font-size: 1.18rem;
         font-weight: 800;
@@ -332,7 +354,7 @@ def combine_data():
     return df.sort_values("date", ascending=False, na_position="last")
 
 
-# ---------- PRESENTATION HELPERS ----------
+# ---------- DISPLAY HELPERS ----------
 def risk_class(level: str):
     level = str(level).strip().lower()
     if level == "high":
@@ -375,7 +397,6 @@ def wrap_text(text: str, max_chars: int = 95):
     words = text.split()
     lines = []
     current = ""
-
     for word in words:
         trial = f"{current} {word}".strip()
         if len(trial) <= max_chars:
@@ -738,8 +759,8 @@ def generate_weekly_report(df, client_type):
     lines.append(f"- Review items: {(report_df['priority'] == 'Review').sum()}")
     lines.append(f"- Monitor items: {(report_df['priority'] == 'Monitor').sum()}")
     lines.append("")
-
     lines.append("TOP PRIORITY UPDATES")
+
     for i, (_, row) in enumerate(top_items.iterrows(), start=1):
         lines.append(f"{i}. {row.get('title', 'Untitled')}")
         lines.append(f"   Source: {row.get('source', 'Unknown')} | Date: {format_date(row.get('date'))}")
@@ -892,72 +913,330 @@ def render_analytics_section(df):
     c1, c2 = st.columns(2)
 
     if "source_counts" in frames:
-        fig_source = px.bar(
-            frames["source_counts"],
-            x="source",
-            y="count",
-            title="Updates by Source"
-        )
+        fig_source = px.bar(frames["source_counts"], x="source", y="count", title="Updates by Source")
         c1.plotly_chart(fig_source, use_container_width=True)
 
     if "topic_counts" in frames:
-        fig_topic = px.pie(
-            frames["topic_counts"],
-            names="topic",
-            values="count",
-            title="Topic Distribution"
-        )
+        fig_topic = px.pie(frames["topic_counts"], names="topic", values="count", title="Topic Distribution")
         c2.plotly_chart(fig_topic, use_container_width=True)
 
     c3, c4 = st.columns(2)
 
     if "priority_counts" in frames:
-        fig_priority = px.bar(
-            frames["priority_counts"],
-            x="priority",
-            y="count",
-            title="Priority Distribution"
-        )
+        fig_priority = px.bar(frames["priority_counts"], x="priority", y="count", title="Priority Distribution")
         c3.plotly_chart(fig_priority, use_container_width=True)
 
     if "risk_counts" in frames:
-        fig_risk = px.bar(
-            frames["risk_counts"],
-            x="risk_level",
-            y="count",
-            title="Risk Distribution"
-        )
+        fig_risk = px.bar(frames["risk_counts"], x="risk_level", y="count", title="Risk Distribution")
         c4.plotly_chart(fig_risk, use_container_width=True)
 
     if "trend" in frames and not frames["trend"].empty:
-        fig_trend = px.line(
-            frames["trend"],
-            x="date_only",
-            y="count",
-            markers=True,
-            title="Update Volume Over Time"
-        )
+        fig_trend = px.line(frames["trend"], x="date_only", y="count", markers=True, title="Update Volume Over Time")
         st.plotly_chart(fig_trend, use_container_width=True)
 
     c5, c6 = st.columns(2)
 
     if "score_by_topic" in frames:
-        fig_score_topic = px.bar(
-            frames["score_by_topic"],
-            x="topic",
-            y="impact_score",
-            title="Average Impact Score by Topic"
-        )
+        fig_score_topic = px.bar(frames["score_by_topic"], x="topic", y="impact_score", title="Average Impact Score by Topic")
         c5.plotly_chart(fig_score_topic, use_container_width=True)
 
     if "score_by_source" in frames:
-        fig_score_source = px.bar(
-            frames["score_by_source"],
-            x="source",
-            y="impact_score",
-            title="Average Impact Score by Source"
-        )
+        fig_score_source = px.bar(frames["score_by_source"], x="source", y="impact_score", title="Average Impact Score by Source")
         c6.plotly_chart(fig_score_source, use_container_width=True)
+
+
+# ---------- SEARCH ----------
+def apply_search(df, query: str):
+    if not query.strip() or df.empty:
+        return df
+
+    q = query.strip().lower()
+
+    def row_matches(row):
+        values = [
+            str(row.get("title", "")),
+            str(row.get("topic", "")),
+            str(row.get("source", "")),
+            str(row.get("ai_summary", "")),
+            str(row.get("business_impact", "")),
+            str(row.get("recommended_action", "")),
+            str(row.get("raw_text", "")),
+            str(row.get("why_this_matters", "")),
+        ]
+        haystack = " ".join(values).lower()
+        return q in haystack
+
+    mask = df.apply(row_matches, axis=1)
+    return df[mask]
+
+
+# ---------- VIEW RENDERERS ----------
+def render_top_urgent_items(filtered):
+    st.markdown('<div class="section-title">Top 3 Urgent Items</div>', unsafe_allow_html=True)
+
+    if filtered.empty:
+        st.info("No urgent items available.")
+        return
+
+    urgent = filtered.sort_values(["impact_score"], ascending=False).head(3)
+
+    cols = st.columns(3)
+    for i, (_, row) in enumerate(urgent.iterrows()):
+        with cols[i]:
+            priority_css = priority_class(row.get("priority", "Monitor"))
+            st.markdown(f"""
+            <div class="urgent-card">
+                <div class="urgent-title">{row.get('title', 'Untitled')}</div>
+                <div class="urgent-meta">Source: {row.get('source', 'Unknown')} | Date: {format_date(row.get('date'))}</div>
+                <span class="{priority_css}">{row.get('priority', 'Monitor')}</span>
+                <span class="pill pill-topic">{row.get('topic', 'Unknown')}</span>
+                <div class="subblock-title">Why this matters</div>
+                <div class="subblock-text">{row.get('why_this_matters', '')}</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+
+def render_overview(filtered, client_type):
+    c1, c2, c3, c4 = st.columns(4)
+
+    with c1:
+        st.markdown(f"""
+        <div class="metric-card">
+            <div class="metric-label">Total Updates</div>
+            <div class="metric-value">{len(filtered)}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with c2:
+        immediate_count = (filtered["priority"] == "Immediate").sum() if not filtered.empty else 0
+        st.markdown(f"""
+        <div class="metric-card">
+            <div class="metric-label">Immediate Priority</div>
+            <div class="metric-value">{immediate_count}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with c3:
+        avg_score = round(filtered["impact_score"].mean(), 1) if not filtered.empty else 0
+        st.markdown(f"""
+        <div class="metric-card">
+            <div class="metric-label">Avg. Impact Score</div>
+            <div class="metric-value">{avg_score}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with c4:
+        topic_count = filtered["topic"].nunique() if "topic" in filtered.columns and not filtered.empty else 0
+        st.markdown(f"""
+        <div class="metric-card">
+            <div class="metric-label">Topics</div>
+            <div class="metric-value">{topic_count}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    st.markdown('<div class="section-title">Client-Specific Insights</div>', unsafe_allow_html=True)
+    insights = generate_client_insights(filtered, client_type)
+
+    st.markdown('<div class="insight-box">', unsafe_allow_html=True)
+    st.markdown(f"**Headline**  \n{insights['headline']}")
+    st.markdown(f"**Key Risk**  \n{insights['key_risk']}")
+    st.markdown(f"**Operational Focus**  \n{insights['operational_focus']}")
+    st.markdown(f"**Recommended Next Step**  \n{insights['recommended_next_step']}")
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    render_top_urgent_items(filtered)
+
+    st.markdown('<div class="section-title">Executive Summary Preview</div>', unsafe_allow_html=True)
+
+    top_preview = filtered.sort_values("impact_score", ascending=False).head(3) if not filtered.empty else pd.DataFrame()
+    st.markdown('<div class="report-box">', unsafe_allow_html=True)
+    if top_preview.empty:
+        st.write("No updates available.")
+    else:
+        for _, row in top_preview.iterrows():
+            st.write(
+                f"- **{row.get('title', 'Untitled')}** | Score: {row.get('impact_score', 0)}/10 | Priority: {row.get('priority', 'Monitor')}"
+            )
+    st.markdown('</div>', unsafe_allow_html=True)
+
+
+def render_reports(filtered, client_type):
+    st.markdown('<div class="section-title">Weekly Report Generator</div>', unsafe_allow_html=True)
+
+    weekly_report_text = generate_weekly_report(filtered, client_type)
+    weekly_report_pdf = build_pdf_bytes("Weekly Regulatory Intelligence Report", weekly_report_text)
+
+    report_col1, report_col2 = st.columns([1, 2])
+
+    with report_col1:
+        st.download_button(
+            label="Download Weekly Report TXT",
+            data=weekly_report_text,
+            file_name=f"weekly_regulatory_report_{sanitize_filename(client_type)}.txt",
+            mime="text/plain",
+            key="weekly-txt",
+        )
+        st.download_button(
+            label="Download Weekly Report PDF",
+            data=weekly_report_pdf,
+            file_name=f"weekly_regulatory_report_{sanitize_filename(client_type)}.pdf",
+            mime="application/pdf",
+            key="weekly-pdf",
+        )
+
+    with report_col2:
+        top_preview = filtered.sort_values("impact_score", ascending=False).head(3) if not filtered.empty else pd.DataFrame()
+        st.markdown('<div class="report-box">', unsafe_allow_html=True)
+        st.markdown("**Executive Summary Preview**")
+        if top_preview.empty:
+            st.write("No updates available.")
+        else:
+            for _, row in top_preview.iterrows():
+                st.write(
+                    f"- **{row.get('title', 'Untitled')}** | Score: {row.get('impact_score', 0)}/10 | Priority: {row.get('priority', 'Monitor')}"
+                )
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    st.markdown('<div class="section-title">Full Intelligence Report</div>', unsafe_allow_html=True)
+
+    full_report_text = build_full_report(filtered, client_type)
+    full_report_pdf = build_pdf_bytes("Full Intelligence Report", full_report_text)
+
+    full_col1, full_col2 = st.columns(2)
+
+    with full_col1:
+        st.download_button(
+            label="Download FULL Report (TXT)",
+            data=full_report_text,
+            file_name=f"full_regulatory_report_{sanitize_filename(client_type)}.txt",
+            mime="text/plain",
+            key="full-txt",
+        )
+
+    with full_col2:
+        st.download_button(
+            label="Download FULL Report (PDF)",
+            data=full_report_pdf,
+            file_name=f"full_regulatory_report_{sanitize_filename(client_type)}.pdf",
+            mime="application/pdf",
+            key="full-pdf",
+        )
+
+
+def render_updates(filtered, client_type):
+    st.markdown('<div class="section-title">Latest Regulatory Updates</div>', unsafe_allow_html=True)
+
+    search_query = st.text_input(
+        "Search updates",
+        placeholder="Search by title, topic, source, summary, action, or raw text..."
+    )
+
+    updates_df = apply_search(filtered, search_query)
+
+    st.caption(f"{len(updates_df)} update(s) shown")
+
+    for idx, row in updates_df.iterrows():
+        row_id = row.get("id", f"row-{idx}")
+
+        if f"ai-{row_id}-{client_type}" in st.session_state:
+            cached = st.session_state[f"ai-{row_id}-{client_type}"]
+            ai_summary = cached["ai_summary"]
+            business_impact = cached["business_impact"]
+            recommended_action = cached["recommended_action"]
+            model_used = cached.get("_model_used", "local fallback")
+        else:
+            ai_summary = row.get("ai_summary", "No summary available.")
+            business_impact = row.get("business_impact", "No impact analysis available.")
+            recommended_action = row.get("recommended_action", "No recommended action available.")
+            model_used = "initial data"
+
+        title = row.get("title", "Untitled")
+        source = row.get("source", "Unknown")
+        date_str = format_date(row.get("date", None))
+        topic = row.get("topic", "Unknown")
+        jurisdiction = row.get("jurisdiction", "Unknown")
+        raw_text = row.get("raw_text", "")
+        url = row.get("url", "")
+        risk_css, risk_label = risk_class(row.get("risk_level", "Low"))
+        extra_class = card_risk_class(row.get("risk_level", "Low"))
+        score = row.get("impact_score", 0)
+        priority = row.get("priority", "Monitor")
+        why_matters = row.get("why_this_matters", "")
+        priority_css = priority_class(priority)
+
+        adjusted_action = client_adjusted_action(recommended_action, client_type, topic, priority)
+
+        st.markdown(f"""
+        <div class="update-card {extra_class}">
+            <div class="update-title">{title}</div>
+            <div class="meta-row">Source: {source} | Date: {date_str} | Jurisdiction: {jurisdiction}</div>
+            <div>
+                <span class="pill pill-source">{source}</span>
+                <span class="pill pill-topic">{topic}</span>
+                <span class="{risk_css}">{risk_label} Risk</span>
+                <span class="{priority_css}">{priority}</span>
+            </div>
+            <div class="subblock-title">Impact Score</div>
+            <div class="subblock-text">{score}/10</div>
+            <div class="subblock-title">AI Summary</div>
+            <div class="subblock-text">{ai_summary}</div>
+            <div class="subblock-title">Why this matters</div>
+            <div class="subblock-text">{why_matters}</div>
+            <div class="subblock-title">Business Impact</div>
+            <div class="subblock-text">{business_impact}</div>
+            <div class="subblock-title">Recommended Action</div>
+            <div class="subblock-text">{adjusted_action}</div>
+            <div class="subblock-title">Model Used</div>
+            <div class="subblock-text">{model_used}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        enriched_row = {
+            **row.to_dict(),
+            "ai_summary": ai_summary,
+            "business_impact": business_impact,
+            "recommended_action": adjusted_action,
+        }
+
+        alert_text = build_client_alert(enriched_row, client_type, score, priority, why_matters)
+        safe_name = sanitize_filename(title)
+        pdf_bytes = build_pdf_bytes(
+            title=f"Client Alert - {title}",
+            content=alert_text,
+        )
+
+        col1, col2, col3 = st.columns([1, 1, 1])
+
+        with col1:
+            if st.button("AI Re-Summarize", key=f"ai-btn-{row_id}-{client_type}"):
+                with st.spinner("Generating updated analysis..."):
+                    enriched = generate_ai_analysis(row, client_type)
+                    st.session_state[f"ai-{row_id}-{client_type}"] = enriched
+                    st.rerun()
+
+        with col2:
+            st.download_button(
+                label="Download TXT",
+                data=alert_text,
+                file_name=f"{safe_name}_client_alert.txt",
+                mime="text/plain",
+                key=f"txt-{row_id}-{client_type}",
+            )
+
+        with col3:
+            st.download_button(
+                label="Download PDF",
+                data=pdf_bytes,
+                file_name=f"{safe_name}_client_alert.pdf",
+                mime="application/pdf",
+                key=f"pdf-{row_id}-{client_type}",
+            )
+
+        if url:
+            st.markdown(f"[Open source item]({url})")
+
+        with st.expander("Show raw text"):
+            st.write(raw_text if raw_text else "No raw text available.")
 
 
 # ---------- APP ----------
@@ -965,7 +1244,7 @@ ensure_data_dir()
 df = combine_data()
 
 with st.sidebar:
-    st.markdown("## Filters")
+    st.markdown("## Controls")
 
     client_type = st.selectbox(
         "Client Type",
@@ -976,6 +1255,11 @@ with st.sidebar:
             "Startup",
             "Importer",
         ]
+    )
+
+    view_mode = st.radio(
+        "View",
+        ["Overview", "Analytics", "Reports", "Updates"]
     )
 
     if st.button("🔄 Refresh Live Data", use_container_width=True):
@@ -1004,6 +1288,8 @@ with st.sidebar:
     else:
         st.info("Using built-in local summarization mode")
 
+    st.markdown("## Filters")
+
     if not df.empty:
         source_options = sorted(df["source"].dropna().astype(str).unique().tolist()) if "source" in df.columns else []
         topic_options = sorted(df["topic"].dropna().astype(str).unique().tolist()) if "topic" in df.columns else []
@@ -1022,7 +1308,7 @@ st.markdown(f"""
         Decision-support layer for food law, compliance, traceability, and supply chain intelligence.
     </p>
     <p class="small-note">
-        Client mode: {client_type} | Live data sources: EFSA, RASFF | OpenRouter-ready + analytics
+        Client mode: {client_type} | View: {view_mode} | Live data sources: EFSA, RASFF | OpenRouter-ready
     </p>
 </div>
 """, unsafe_allow_html=True)
@@ -1073,226 +1359,17 @@ if not filtered.empty:
     filtered["priority"] = filtered["impact_score"].apply(determine_priority)
     filtered["why_this_matters"] = filtered.apply(lambda row: why_this_matters(row, client_type), axis=1)
 
-# ---------- METRICS ----------
-c1, c2, c3, c4 = st.columns(4)
+# ---------- VIEW MODE ----------
+if view_mode == "Overview":
+    render_overview(filtered, client_type)
 
-with c1:
-    st.markdown(f"""
-    <div class="metric-card">
-        <div class="metric-label">Total Updates</div>
-        <div class="metric-value">{len(filtered)}</div>
-    </div>
-    """, unsafe_allow_html=True)
+elif view_mode == "Analytics":
+    render_analytics_section(filtered)
 
-with c2:
-    immediate_count = (filtered["priority"] == "Immediate").sum() if not filtered.empty else 0
-    st.markdown(f"""
-    <div class="metric-card">
-        <div class="metric-label">Immediate Priority</div>
-        <div class="metric-value">{immediate_count}</div>
-    </div>
-    """, unsafe_allow_html=True)
+elif view_mode == "Reports":
+    render_reports(filtered, client_type)
 
-with c3:
-    avg_score = round(filtered["impact_score"].mean(), 1) if not filtered.empty else 0
-    st.markdown(f"""
-    <div class="metric-card">
-        <div class="metric-label">Avg. Impact Score</div>
-        <div class="metric-value">{avg_score}</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-with c4:
-    topic_count = filtered["topic"].nunique() if "topic" in filtered.columns and not filtered.empty else 0
-    st.markdown(f"""
-    <div class="metric-card">
-        <div class="metric-label">Topics</div>
-        <div class="metric-value">{topic_count}</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-# ---------- ANALYTICS ----------
-render_analytics_section(filtered)
-
-# ---------- CLIENT-SPECIFIC INSIGHTS PANEL ----------
-st.markdown('<div class="section-title">Client-Specific Insights</div>', unsafe_allow_html=True)
-
-insights = generate_client_insights(filtered, client_type)
-
-st.markdown('<div class="insight-box">', unsafe_allow_html=True)
-st.markdown(f"**Headline**  \n{insights['headline']}")
-st.markdown(f"**Key Risk**  \n{insights['key_risk']}")
-st.markdown(f"**Operational Focus**  \n{insights['operational_focus']}")
-st.markdown(f"**Recommended Next Step**  \n{insights['recommended_next_step']}")
-st.markdown('</div>', unsafe_allow_html=True)
-
-# ---------- WEEKLY REPORT ----------
-st.markdown('<div class="section-title">Weekly Report Generator</div>', unsafe_allow_html=True)
-
-weekly_report_text = generate_weekly_report(filtered, client_type)
-weekly_report_pdf = build_pdf_bytes("Weekly Regulatory Intelligence Report", weekly_report_text)
-
-report_col1, report_col2 = st.columns([1, 2])
-
-with report_col1:
-    st.download_button(
-        label="Download Weekly Report TXT",
-        data=weekly_report_text,
-        file_name=f"weekly_regulatory_report_{sanitize_filename(client_type)}.txt",
-        mime="text/plain",
-        key="weekly-txt",
-    )
-    st.download_button(
-        label="Download Weekly Report PDF",
-        data=weekly_report_pdf,
-        file_name=f"weekly_regulatory_report_{sanitize_filename(client_type)}.pdf",
-        mime="application/pdf",
-        key="weekly-pdf",
-    )
-
-with report_col2:
-    top_preview = filtered.sort_values("impact_score", ascending=False).head(3) if not filtered.empty else pd.DataFrame()
-    st.markdown('<div class="report-box">', unsafe_allow_html=True)
-    st.markdown("**Executive Summary Preview**")
-    if top_preview.empty:
-        st.write("No updates available.")
-    else:
-        for _, row in top_preview.iterrows():
-            st.write(
-                f"- **{row.get('title', 'Untitled')}** | Score: {row.get('impact_score', 0)}/10 | Priority: {row.get('priority', 'Monitor')}"
-            )
-    st.markdown('</div>', unsafe_allow_html=True)
-
-# ---------- FULL REPORT ----------
-st.markdown('<div class="section-title">Full Intelligence Report</div>', unsafe_allow_html=True)
-
-full_report_text = build_full_report(filtered, client_type)
-full_report_pdf = build_pdf_bytes("Full Intelligence Report", full_report_text)
-
-full_col1, full_col2 = st.columns(2)
-
-with full_col1:
-    st.download_button(
-        label="Download FULL Report (TXT)",
-        data=full_report_text,
-        file_name=f"full_regulatory_report_{sanitize_filename(client_type)}.txt",
-        mime="text/plain",
-        key="full-txt",
-    )
-
-with full_col2:
-    st.download_button(
-        label="Download FULL Report (PDF)",
-        data=full_report_pdf,
-        file_name=f"full_regulatory_report_{sanitize_filename(client_type)}.pdf",
-        mime="application/pdf",
-        key="full-pdf",
-    )
-
-# ---------- UPDATES ----------
-st.markdown('<div class="section-title">Latest Regulatory Updates</div>', unsafe_allow_html=True)
-
-for idx, row in filtered.iterrows():
-    row_id = row.get("id", f"row-{idx}")
-
-    if f"ai-{row_id}-{client_type}" in st.session_state:
-        cached = st.session_state[f"ai-{row_id}-{client_type}"]
-        ai_summary = cached["ai_summary"]
-        business_impact = cached["business_impact"]
-        recommended_action = cached["recommended_action"]
-        model_used = cached.get("_model_used", "local fallback")
-    else:
-        ai_summary = row.get("ai_summary", "No summary available.")
-        business_impact = row.get("business_impact", "No impact analysis available.")
-        recommended_action = row.get("recommended_action", "No recommended action available.")
-        model_used = "initial data"
-
-    title = row.get("title", "Untitled")
-    source = row.get("source", "Unknown")
-    date_str = format_date(row.get("date", None))
-    topic = row.get("topic", "Unknown")
-    jurisdiction = row.get("jurisdiction", "Unknown")
-    raw_text = row.get("raw_text", "")
-    url = row.get("url", "")
-    risk_css, risk_label = risk_class(row.get("risk_level", "Low"))
-    extra_class = card_risk_class(row.get("risk_level", "Low"))
-    score = row.get("impact_score", 0)
-    priority = row.get("priority", "Monitor")
-    why_matters = row.get("why_this_matters", "")
-    priority_css = priority_class(priority)
-
-    adjusted_action = client_adjusted_action(recommended_action, client_type, topic, priority)
-
-    st.markdown(f"""
-    <div class="update-card {extra_class}">
-        <div class="update-title">{title}</div>
-        <div class="meta-row">Source: {source} | Date: {date_str} | Jurisdiction: {jurisdiction}</div>
-        <div>
-            <span class="pill pill-source">{source}</span>
-            <span class="pill pill-topic">{topic}</span>
-            <span class="{risk_css}">{risk_label} Risk</span>
-            <span class="{priority_css}">{priority}</span>
-        </div>
-        <div class="subblock-title">Impact Score</div>
-        <div class="subblock-text">{score}/10</div>
-        <div class="subblock-title">AI Summary</div>
-        <div class="subblock-text">{ai_summary}</div>
-        <div class="subblock-title">Why this matters</div>
-        <div class="subblock-text">{why_matters}</div>
-        <div class="subblock-title">Business Impact</div>
-        <div class="subblock-text">{business_impact}</div>
-        <div class="subblock-title">Recommended Action</div>
-        <div class="subblock-text">{adjusted_action}</div>
-        <div class="subblock-title">Model Used</div>
-        <div class="subblock-text">{model_used}</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    enriched_row = {
-        **row.to_dict(),
-        "ai_summary": ai_summary,
-        "business_impact": business_impact,
-        "recommended_action": adjusted_action,
-    }
-
-    alert_text = build_client_alert(enriched_row, client_type, score, priority, why_matters)
-    safe_name = sanitize_filename(title)
-    pdf_bytes = build_pdf_bytes(
-        title=f"Client Alert - {title}",
-        content=alert_text,
-    )
-
-    col1, col2, col3 = st.columns([1, 1, 1])
-
-    with col1:
-        if st.button("AI Re-Summarize", key=f"ai-btn-{row_id}-{client_type}"):
-            with st.spinner("Generating updated analysis..."):
-                enriched = generate_ai_analysis(row, client_type)
-                st.session_state[f"ai-{row_id}-{client_type}"] = enriched
-                st.rerun()
-
-    with col2:
-        st.download_button(
-            label="Download TXT",
-            data=alert_text,
-            file_name=f"{safe_name}_client_alert.txt",
-            mime="text/plain",
-            key=f"txt-{row_id}-{client_type}",
-        )
-
-    with col3:
-        st.download_button(
-            label="Download PDF",
-            data=pdf_bytes,
-            file_name=f"{safe_name}_client_alert.pdf",
-            mime="application/pdf",
-            key=f"pdf-{row_id}-{client_type}",
-        )
-
-    if url:
-        st.markdown(f"[Open source item]({url})")
-
-    with st.expander("Show raw text"):
-        st.write(raw_text if raw_text else "No raw text available.")
+elif view_mode == "Updates":
+    render_updates(filtered, client_type)
 
 st.caption("Prototype for regulatory horizon scanning, client-specific intelligence, consulting outputs, analytics, and OpenRouter-based free-model enrichment.")
