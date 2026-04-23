@@ -1716,16 +1716,24 @@ def render_intro_cards():
 
 # ========== METRIC CARDS ==========
 def render_metric_cards(filtered, client_type):
-    total = len(filtered)
-    immediate = (filtered["priority"] == "Immediate").sum() if not filtered.empty else 0
-    review = (filtered["priority"] == "Review").sum() if not filtered.empty else 0
-    avg_score = round(filtered["impact_score"].mean(), 1) if not filtered.empty else 0
-    avg_conf = round(filtered["confidence_score"].mean(), 1) if not filtered.empty else 0
-    high_risk = (filtered["risk_level"].astype(str).str.lower() == "high").sum() if not filtered.empty else 0
-    topics = filtered["topic"].nunique() if "topic" in filtered.columns and not filtered.empty else 0
-    sources = filtered["source"].nunique() if "source" in filtered.columns and not filtered.empty else 0
-    watchlist_count = sum(1 for _, r in filtered.iterrows() if is_watchlisted(r.get("id", "")))
+    # --- SAFE METRICS ---
+    if filtered is None or filtered.empty:
+        total = immediate = review = avg_score = avg_conf = high_risk = topics = watchlist_count = 0
+    else:
+        total = len(filtered)
+        immediate = (filtered["priority"] == "Immediate").sum() if "priority" in filtered.columns else 0
+        review = (filtered["priority"] == "Review").sum() if "priority" in filtered.columns else 0
+        avg_score = round(filtered["impact_score"].mean(), 1) if "impact_score" in filtered.columns else 0
+        avg_conf = round(filtered["confidence_score"].mean(), 1) if "confidence_score" in filtered.columns else 0
+        high_risk = (
+            filtered["risk_level"].astype(str).str.lower() == "high"
+        ).sum() if "risk_level" in filtered.columns else 0
+        topics = filtered["topic"].nunique() if "topic" in filtered.columns else 0
+        watchlist_count = sum(
+            1 for _, r in filtered.iterrows() if is_watchlisted(r.get("id", ""))
+        )
 
+    # --- CARD DEFINITIONS ---
     cards = [
         ("Total Updates", total, None, "📋"),
         ("Immediate", immediate, "metric-delta-up" if immediate > 0 else "metric-delta-neutral", "🔴"),
@@ -1737,11 +1745,15 @@ def render_metric_cards(filtered, client_type):
         ("Watchlist", watchlist_count, None, "⭐"),
     ]
 
+    # --- BUILD HTML ---
     html_cards = ""
+
     for label, value, delta_class, icon in cards:
         delta_html = ""
         if delta_class:
-            delta_html = f'<div class="metric-delta {delta_class}">{"▲ attention" if "up" in str(delta_class) else "—"}</div>'
+            symbol = "▲ attention" if "up" in delta_class else "—"
+            delta_html = f'<div class="metric-delta {delta_class}">{symbol}</div>'
+
         html_cards += f"""
         <div class="metric-card">
             <div class="metric-label">{icon} {label}</div>
@@ -1750,9 +1762,11 @@ def render_metric_cards(filtered, client_type):
         </div>
         """
 
-    st.markdown(f'<div class="metric-grid">{html_cards}</div>', unsafe_allow_html=True)
-
-
+    # --- FINAL RENDER (KRİTİK KISIM) ---
+    st.markdown(
+        f'<div class="metric-grid">{html_cards}</div>',
+        unsafe_allow_html=True
+    )
 # ========== TOP URGENT ITEMS ==========
 def render_top_urgent_items(filtered, n=3):
     st.markdown(f"""
