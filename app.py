@@ -1401,11 +1401,45 @@ def render_card(row, idx, ct):
     sf = sanitize_fn(title)
     pdf = build_pdf(f"Alert - {title}", alert)
 
-    b1, b2, b3, b4, b5 = st.columns(5)
+        b1, b2, b3, b4, b5 = st.columns(5)
+
     with b1:
-        if st.button("Remove WL" if wl else "Add WL", key=f"wl-{rid}"):
-            toggle_watchlist(rid)
-            st.rerun()
+        work_items = load_work_items()
+        is_saved_watchlist = any(
+            str(x.get("id", "")) == rid and str(x.get("type", "")).lower() == "watchlist"
+            for x in work_items
+        )
+
+        if st.button("Remove WL" if is_saved_watchlist else "Add WL", key=f"wl_{rid}_{ct}"):
+            if is_saved_watchlist:
+                remove_work_item(rid, "watchlist")
+                st.success("Removed from watchlist")
+                st.rerun()
+            else:
+                item = {
+                    "id": rid,
+                    "type": "watchlist",
+                    "status": "open",
+                    "created_at": datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC"),
+                    "client_type": ct,
+                    "title": title,
+                    "source": source,
+                    "risk_level": row.get("risk_level", "Low"),
+                    "priority": pri,
+                    "url": url,
+                }
+
+                added = add_work_item(item)
+
+                if added:
+                    analytics["actions"] += 1
+                    save_analytics(analytics)
+                    st.success("Added to watchlist")
+                else:
+                    st.info("Already exists in watchlist")
+
+                st.rerun()
+
     with b2:
         if st.button("AI Analyze", key=f"aib-{rid}-{ct}"):
             with st.spinner("Analyzing..."):
@@ -1414,10 +1448,13 @@ def render_card(row, idx, ct):
                     st.session_state["ai_cache"] = {}
                 st.session_state["ai_cache"][ai_key] = res
                 st.rerun()
+
     with b3:
         st.download_button("TXT", alert, f"{sf}.txt", "text/plain", key=f"t-{rid}-{ct}")
+
     with b4:
         st.download_button("PDF", pdf, f"{sf}.pdf", "application/pdf", key=f"p-{rid}-{ct}")
+
     with b5:
         if url and url != "n/a":
             st.link_button("Source", url)
