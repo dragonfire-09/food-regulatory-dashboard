@@ -290,6 +290,139 @@ def ensure_metadata_fields(df):
     return df
 
 
+# ================================================================
+# DATA QUALITY & INTELLIGENCE LAYER
+# ================================================================
+
+EXCLUDE_KEYWORDS = [
+    "campaign", "awareness", "safe2eat", "event", "webinar",
+    "workshop", "training", "conference", "celebration", "world day"
+]
+
+PRIORITY_KEYWORDS = [
+    "recall", "alert", "contamination", "risk", "ban",
+    "outbreak", "warning", "withdrawal", "serious", "urgent",
+    "salmonella", "listeria", "aflatoxin", "undeclared allergen"
+]
+
+
+def clean_noise(df):
+    """Gürültüyü azalt - haber/etkinlik gibi kayıtları filtrele."""
+    if df.empty or "title" not in df.columns:
+        return df
+    pattern = "|".join(EXCLUDE_KEYWORDS)
+    mask = df["title"].str.lower().str.contains(pattern, na=False)
+    cleaned = df[~mask].copy()
+    return cleaned if not cleaned.empty else df
+
+
+def enrich_signals(df):
+    """Sinyal skoru, karar ve trend bilgisi ekle."""
+    if df.empty:
+        return df
+
+    # Signal score
+    if "title" in df.columns:
+        df["signal_score"] = df["title"].str.lower().apply(
+            lambda x: sum(k in str(x) for k in PRIORITY_KEYWORDS)
+        )
+    else:
+        df["signal_score"] = 0
+
+    # Decision classification
+    df["decision"] = df.apply(classify_action, axis=1)
+
+    # Risk velocity (son 3 gün)
+    if "date" in df.columns:
+        now = pd.Timestamp.now()
+        three_days = now - pd.Timedelta(days=3)
+        df["is_recent"] = df["date"] >= three_days
+    else:
+        df["is_recent"] = False
+
+    return df
+
+
+def classify_action(row):
+    """Her kayıt için aksiyon kararı üret."""
+    risk = str(row.get("risk_level", "")).lower()
+    priority = str(row.get("priority", "")).lower()
+    signal = row.get("signal_score", 0)
+
+    if risk == "high" and signal >= 2:
+        return "🔴 Immediate action required"
+    if risk == "high":
+        return "🟠 Escalate and review"
+    if priority == "immediate":
+        return "🟠 Escalate and review"
+    if risk == "medium":
+        return "🟡 Monitor and assess"
+    if signal >= 1:
+        return "🟡 Monitor and assess"
+    return "🟢 Low priority - track"
+
+
+def suggest_watchlist(df, limit=5):
+    """Otomatik watchlist önerisi üret."""
+    if df.empty:
+        return pd.DataFrame()
+    candidates = df[
+        (df["risk_level"].astype(str).str.lower() == "high") |
+        (df.get("priority", pd.Series(dtype=str)).astype(str) == "Immediate") |
+        (df.get("signal_score", pd.Series(dtype=int)) >= 2)
+    ]
+    if candidates.empty:
+        candidates = df.nlargest(limit, "impact_score") if "impact_score" in df.columns else df.head(limit)
+    return candidates.head(limit)
+
+
+def compute_trend_metrics(df):
+    """Trend metrikleri hesapla."""
+    metrics = {
+        "total": len(df),
+        "recent_count": 0,
+        "recent_pct": 0,
+        "trend_direction": "→ Stable",
+        "risk_velocity": "Normal",
+        "new_vs_old": "N/A",
+    }
+
+    if df.empty or "date" not in df.columns:
+        return metrics
+
+    now = pd.Timestamp.now()
+    three_days = now - pd.Timedelta(days=3)
+    seven_days = now - pd.Timedelta(days=7)
+
+    recent = df[df["date"] >= three_days]
+    older = df[(df["date"] >= seven_days) & (df["date"] < three_days)]
+
+    metrics["recent_count"] = len(recent)
+    metrics["recent_pct"] = round(len(recent) / max(len(df), 1) * 100)
+
+    # Trend direction
+    if len(recent) > len(older):
+        metrics["trend_direction"] = "📈 Increasing"
+    elif len(recent) < len(older):
+        metrics["trend_direction"] = "📉 Decreasing"
+    else:
+        metrics["trend_direction"] = "→ Stable"
+
+    # Risk velocity
+    high_recent = len(recent[recent["risk_level"].astype(str).str.lower() == "high"]) if not recent.empty else 0
+    if high_recent >= 3:
+        metrics["risk_velocity"] = "🔴 High velocity"
+    elif high_recent >= 1:
+        metrics["risk_velocity"] = "🟡 Elevated"
+    else:
+        metrics["risk_velocity"] = "🟢 Normal"
+
+    # New vs old
+    metrics["new_vs_old"] = f"{len(recent)} new / {len(older)} prior week"
+
+    return metrics
+
+
 @st.cache_data(ttl=120)
 def combine_data():
     live = load_json_records(LIVE_DATA_FILE)
@@ -310,8 +443,13 @@ def combine_data():
                 f"{r.get('title','')}{r.get('source','')}{r.get('date','')}".encode()
             ).hexdigest()[:12], axis=1,
         )
-    return df.sort_values("date", ascending=False, na_position="last").reset_index(drop=True)
+    df = df.sort_values("date", ascending=False, na_position="last").reset_index(drop=True)
 
+    # Intelligence layer
+    df = clean_noise(df)
+    df = enrich_signals(df)
+
+    return df
 
 def minutes_since_update(path):
     if not path.exists():
