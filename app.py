@@ -914,7 +914,7 @@ def render_overview(filtered, ct):
 
         st.info(ins.get("headline", ""))
 
-    c_focus, c_next = st.columns(2)
+        c_focus, c_next = st.columns(2)
 
     with c_focus:
         st.caption("Focus")
@@ -938,41 +938,40 @@ def render_overview(filtered, ct):
 
     st.markdown("**Top relevant items**")
 
-top3 = filtered.sort_values(
-    ["impact_score", "confidence_score"],
-    ascending=False
-).head(3)
+    top3 = filtered.sort_values(
+        ["impact_score", "confidence_score"],
+        ascending=False
+    ).head(3)
 
-for _, r in top3.iterrows():
-    
-            title = r.get("title", "Untitled")
-            why = r.get("why_this_matters", "")
-            url = r.get("url", "")
-            source = r.get("source", "")
-            risk = str(r.get("risk_level", "")).lower()
+    for _, r in top3.iterrows():
+        title = r.get("title", "Untitled")
+        why = r.get("why_this_matters", "")
+        url = r.get("url", "")
+        source = r.get("source", "")
+        risk = str(r.get("risk_level", "")).lower()
 
-            risk_label = ""
-            if risk == "high":
-                risk_label = "HIGH"
-            elif risk == "medium":
-                risk_label = "MED"
+        risk_label = ""
+        if risk == "high":
+            risk_label = "HIGH"
+        elif risk == "medium":
+            risk_label = "MED"
 
-            box1, box2 = st.columns([6, 1])
+        box1, box2 = st.columns([6, 1])
 
-            with box1:
-                if url and str(url).strip():
-                    st.markdown(f"**[{title} ↗]({url})**")
-                else:
-                    st.markdown(f"**{title}**")
+        with box1:
+            if url and str(url).strip():
+                st.markdown(f"**[{title} ↗]({url})**")
+            else:
+                st.markdown(f"**{title}**")
 
-                st.write(why)
-                st.caption(source)
+            st.write(why)
+            st.caption(source)
 
-            with box2:
-                if risk_label:
-                    st.metric("Risk", risk_label)
+        with box2:
+            if risk_label:
+                st.metric("Risk", risk_label)
 
-            st.divider()
+        st.divider()
 
     render_urgent(filtered)
     render_timeline(filtered)
@@ -988,17 +987,6 @@ for _, r in top3.iterrows():
             fig = px.pie(fr["topic"], names="topic", values="count", hole=0.45)
             fig.update_layout(margin=dict(t=10, b=10, l=10, r=10), height=280)
             c1.plotly_chart(fig, use_container_width=True)
-
-        if "pri" in fr:
-            fig = px.bar(
-                fr["pri"],
-                x="priority",
-                y="count",
-                color="priority",
-                color_discrete_map=PRIORITY_COLORS
-            )
-            fig.update_layout(margin=dict(t=10, b=10), height=280, showlegend=False)
-            c2.plotly_chart(fig, use_container_width=True)
 # ================================================================
 # VIEW: ANALYTICS
 # ================================================================
