@@ -11,7 +11,7 @@ import json
 
 SOURCES = [
     {
-        "name": "RASFF Portal API v2",
+        "name": "RASFF Portal API",
         "type": "api",
         "url": "https://webgate.ec.europa.eu/rasff-window/backend/public/notification/search/consolidated",
         "method": "POST",
@@ -41,46 +41,46 @@ SOURCES = [
         "jurisdiction": "USA",
     },
     {
-        "name": "EFSA Scientific Opinions",
-        "type": "rss",
-        "url": "https://www.efsa.europa.eu/en/rss/efsa-journal",
-        "source_label": "EFSA Science",
-        "jurisdiction": "EU",
-    },
-    {
-        "name": "CFIA Canada Recalls",
-        "type": "rss",
-        "url": "https://recalls-rappels.canada.ca/en/search/site.atom",
-        "source_label": "CFIA",
-        "jurisdiction": "Canada",
-    },
-    {
-        "name": "EU Official Journal",
-        "type": "rss",
-        "url": "https://eur-lex.europa.eu/EN/display-feed.rss?myRssId=mPnHmEk4c6Y7gMOOnh2GpE6jINsa8BLUPP08MFDyEOM%3D",
-        "source_label": "EU Law",
-        "jurisdiction": "EU",
-    },
-    {
-        "name": "Codex Alimentarius",
-        "type": "rss",
-        "url": "https://www.fao.org/feed/rss/fao-newsroom/en",
-        "source_label": "Codex",
-        "jurisdiction": "International",
-    },
-    {
-        "name": "BfR Germany",
-        "type": "rss",
-        "url": "https://www.bfr.bund.de/en/rss/press_releases.xml",
-        "source_label": "BfR",
-        "jurisdiction": "Germany",
-    },
-    {
         "name": "ANSES France",
         "type": "rss",
         "url": "https://www.anses.fr/en/rss.xml",
         "source_label": "ANSES",
         "jurisdiction": "France",
+    },
+    {
+        "name": "Food Safety News",
+        "type": "rss",
+        "url": "https://www.foodsafetynews.com/feed/",
+        "source_label": "FSN",
+        "jurisdiction": "International",
+    },
+    {
+        "name": "Food Navigator EU",
+        "type": "rss",
+        "url": "https://www.foodnavigator.com/Info/RSS-Feeds",
+        "source_label": "FoodNav",
+        "jurisdiction": "EU",
+    },
+    {
+        "name": "GOV UK Food",
+        "type": "rss",
+        "url": "https://www.gov.uk/search/all.atom?keywords=food+safety&order=updated-newest",
+        "source_label": "GOV UK",
+        "jurisdiction": "UK",
+    },
+    {
+        "name": "USDA FSIS Recalls",
+        "type": "rss",
+        "url": "https://www.fsis.usda.gov/rss/recalls.xml",
+        "source_label": "USDA",
+        "jurisdiction": "USA",
+    },
+    {
+        "name": "Health Canada Recalls",
+        "type": "rss",
+        "url": "https://recalls-rappels.canada.ca/en/feed/healthy-canadians-702",
+        "source_label": "HC Canada",
+        "jurisdiction": "Canada",
     },
 ]
 
