@@ -10,7 +10,6 @@ import json
 # ================================================================
 
 SOURCES = [
-    # RASFF API (şu an kapalı ama gelecekte açılabilir)
     {
         "name": "RASFF Portal API v2",
         "type": "api",
@@ -20,7 +19,6 @@ SOURCES = [
         "source_label": "RASFF",
         "jurisdiction": "EU",
     },
-    # Aktif RSS kaynakları
     {
         "name": "WHO Food Safety",
         "type": "rss",
@@ -42,39 +40,38 @@ SOURCES = [
         "source_label": "FDA",
         "jurisdiction": "USA",
     },
-    # Yeni kaynaklar
     {
         "name": "EFSA Scientific Opinions",
         "type": "rss",
-        "url": "https://www.efsa.europa.eu/en/rss/scientific-outputs",
+        "url": "https://www.efsa.europa.eu/en/rss/efsa-journal",
         "source_label": "EFSA Science",
         "jurisdiction": "EU",
     },
     {
         "name": "CFIA Canada Recalls",
         "type": "rss",
-        "url": "https://recalls-rappels.canada.ca/en/feed/cfia-food-recall-warnings-702",
+        "url": "https://recalls-rappels.canada.ca/en/search/site.atom",
         "source_label": "CFIA",
         "jurisdiction": "Canada",
     },
     {
         "name": "EU Official Journal",
         "type": "rss",
-        "url": "https://eur-lex.europa.eu/rss/document/OJ-L.xml",
+        "url": "https://eur-lex.europa.eu/EN/display-feed.rss?myRssId=mPnHmEk4c6Y7gMOOnh2GpE6jINsa8BLUPP08MFDyEOM%3D",
         "source_label": "EU Law",
         "jurisdiction": "EU",
     },
     {
         "name": "Codex Alimentarius",
         "type": "rss",
-        "url": "https://www.fao.org/fao-who-codexalimentarius/rss/en/",
+        "url": "https://www.fao.org/feed/rss/fao-newsroom/en",
         "source_label": "Codex",
         "jurisdiction": "International",
     },
     {
         "name": "BfR Germany",
         "type": "rss",
-        "url": "https://www.bfr.bund.de/en/rss/press_information.xml",
+        "url": "https://www.bfr.bund.de/en/rss/press_releases.xml",
         "source_label": "BfR",
         "jurisdiction": "Germany",
     },
@@ -311,6 +308,16 @@ def try_rss_source(source, limit=10):
                 if not any(kw in combined.lower() for kw in food_keywords):
                     continue
 
+            # FAO/Codex - sadece food
+            if source_label == "Codex":
+                food_keywords = [
+                    "food", "codex", "safety", "standard",
+                    "nutrition", "contamination", "trade",
+                    "agriculture", "pesticide", "residue"
+                ]
+                if not any(kw in combined.lower() for kw in food_keywords):
+                    continue
+
             topic = detect_topic(combined)
             risk = detect_risk(combined)
 
@@ -358,7 +365,7 @@ def try_rss_source(source, limit=10):
 # MAIN FETCH FUNCTION
 # ================================================================
 
-def fetch_rasff_updates(limit=10):
+def fetch_rasff_updates(limit=30):
     session = requests.Session()
     session.headers.update(HEADERS)
 
@@ -368,7 +375,7 @@ def fetch_rasff_updates(limit=10):
         if source["type"] == "api":
             items = try_api_source(source, session)
         else:
-            items = try_rss_source(source, limit)
+            items = try_rss_source(source, limit=10)
 
         if items:
             all_results.extend(items)
@@ -376,7 +383,6 @@ def fetch_rasff_updates(limit=10):
             sys.stderr.flush()
 
     if all_results:
-        all_results = all_results[:limit]
         sys.stderr.write(f"[SOURCE] TOTAL SUCCESS: {len(all_results)} live items\n")
         sys.stderr.flush()
         return all_results
