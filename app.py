@@ -889,13 +889,15 @@ def render_timeline(filtered, mx=8):
 # VIEW: OVERVIEW (istatistikler SADECE burada, compact)
 # ================================================================
 def render_overview(filtered, ct):
-    # 5 kompakt metrik - TEK satir
+    # 5 kompakt metrik - TEK satır
     c1, c2, c3, c4, c5 = st.columns(5)
+
     t = len(filtered)
     imm = int((filtered["priority"] == "Immediate").sum()) if not filtered.empty else 0
     rev = int((filtered["priority"] == "Review").sum()) if not filtered.empty else 0
     high = int((filtered["risk_level"].astype(str).str.lower() == "high").sum()) if not filtered.empty else 0
     avg = round(filtered["impact_score"].mean(), 1) if not filtered.empty else 0
+
     c1.metric("Updates", t)
     c2.metric("Immediate", imm)
     c3.metric("Review", rev)
@@ -906,6 +908,7 @@ def render_overview(filtered, ct):
     st.subheader("Client Insights")
     ins = client_insights(filtered, ct)
     trend_icon = {"up": "Trending Up", "down": "Trending Down", "stable": "Stable"}.get(ins["trend"], "Stable")
+
     st.markdown(
         f'<div style="background:linear-gradient(135deg,#f0f9ff 0%,#f5f3ff 100%);'
         f'border-radius:14px;padding:1.1rem;border:1px solid #e0e7ff;margin-bottom:0.8rem;">'
@@ -917,32 +920,53 @@ def render_overview(filtered, ct):
         f'<strong>Next Step:</strong> {ins["next_step"]}</div></div>',
         unsafe_allow_html=True,
     )
-    
-    st.markdown(
-        f"""
-        <div style="
-            background:#ffffff;
-            border:1px solid #e2e8f0;
-            border-radius:14px;
-            padding:1rem 1.1rem;
-            margin-bottom:0.9rem;
-            box-shadow:0 2px 8px rgba(15,23,42,0.04);
-        ">
-            <div style="
-                font-size:0.75rem;
-                font-weight:700;
-                color:#64748b;
-                text-transform:uppercase;
-                letter-spacing:0.05em;
-                margin-bottom:0.5rem;
-            ">
-                Why this matters
+
+    # Why this matters
+    if not filtered.empty:
+        top3 = filtered.sort_values(
+            ["impact_score", "confidence_score"],
+            ascending=False
+        ).head(3)
+
+        items_html = ""
+
+        for _, row in top3.iterrows():
+            items_html += f"""
+            <div style="margin-bottom:0.7rem;">
+                <div style="font-weight:700;color:#0f172a;font-size:0.9rem;">
+                    {row.get("title", "Untitled")}
+                </div>
+                <div style="font-size:0.86rem;color:#475569;line-height:1.5;">
+                    {row.get("why_this_matters", "No explanation available.")}
+                </div>
             </div>
-            {items_html}
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+            """
+
+        st.markdown(
+            f"""
+            <div style="
+                background:#ffffff;
+                border:1px solid #e2e8f0;
+                border-radius:14px;
+                padding:1rem 1.1rem;
+                margin-bottom:0.9rem;
+                box-shadow:0 2px 8px rgba(15,23,42,0.04);
+            ">
+                <div style="
+                    font-size:0.75rem;
+                    font-weight:700;
+                    color:#64748b;
+                    text-transform:uppercase;
+                    letter-spacing:0.05em;
+                    margin-bottom:0.5rem;
+                ">
+                    Why this matters
+                </div>
+                {items_html}
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
     render_urgent(filtered)
     render_timeline(filtered)
@@ -951,18 +975,24 @@ def render_overview(filtered, ct):
     st.subheader("Quick Analytics")
     if not filtered.empty:
         fr = get_frames(filtered)
+
         c1, c2 = st.columns(2)
+
         if "topic" in fr:
             fig = px.pie(fr["topic"], names="topic", values="count", hole=0.45)
             fig.update_layout(margin=dict(t=10, b=10, l=10, r=10), height=280)
             c1.plotly_chart(fig, use_container_width=True)
+
         if "pri" in fr:
-            fig = px.bar(fr["pri"], x="priority", y="count", color="priority",
-                         color_discrete_map=PRIORITY_COLORS)
+            fig = px.bar(
+                fr["pri"],
+                x="priority",
+                y="count",
+                color="priority",
+                color_discrete_map=PRIORITY_COLORS
+            )
             fig.update_layout(margin=dict(t=10, b=10), height=280, showlegend=False)
             c2.plotly_chart(fig, use_container_width=True)
-
-
 # ================================================================
 # VIEW: ANALYTICS
 # ================================================================
