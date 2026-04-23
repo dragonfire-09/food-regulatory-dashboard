@@ -1592,7 +1592,14 @@ if st.button("🧪 Test EFSA Fetch", use_container_width=True):
         selected_priorities = []
         data_mode = "All"
         min_confidence = 0
+        
+last_updated_relative = format_relative_update_time(LIVE_DATA_FILE) or "unknown"
 
+if "client_type" not in globals():
+    client_type = "General"
+
+if "AUTO_REFRESH_MINUTES" not in globals():
+    AUTO_REFRESH_MINUTES = 30
 st.markdown(f"""
 <div class="hero-box">
     <div class="hero-topline">Regulatory Intelligence Prototype</div>
