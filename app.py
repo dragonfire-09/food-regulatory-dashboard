@@ -1062,58 +1062,40 @@ def render_overview(filtered, ct):
     render_timeline(filtered)
 
     # ============================================================
-    # REGULATORY SNAPSHOT
+    # Quick Analytics
     # ============================================================
-    st.subheader("Regulatory Snapshot")
+       st.subheader("Quick Analytics")
 
     if not filtered.empty:
         fr = get_frames(filtered)
 
-        total_updates = len(filtered)
         immediate_count = int((filtered["priority"] == "Immediate").sum()) if "priority" in filtered.columns else 0
         high_risk_count = int((filtered["risk_level"].astype(str).str.lower() == "high").sum()) if "risk_level" in filtered.columns else 0
-        live_ratio = 0
+        avg_impact = round(filtered["impact_score"].mean(), 1) if "impact_score" in filtered.columns else 0
 
-        if "source_status" in filtered.columns and len(filtered) > 0:
-            live_ratio = round(
-                (filtered["source_status"].astype(str).str.lower() == "live").sum() / len(filtered) * 100
-            )
+        k1, k2, k3 = st.columns(3)
+        k1.metric("Immediate", immediate_count)
+        k2.metric("High Risk", high_risk_count)
+        k3.metric("Avg Impact", f"{avg_impact}/10")
 
-        top_topic = "N/A"
-        if "topic" in filtered.columns and not filtered["topic"].dropna().empty:
-            top_topic = filtered["topic"].value_counts().idxmax()
-
-        k1, k2, k3, k4 = st.columns(4)
-        k1.metric("Total Updates", total_updates)
-        k2.metric("Immediate", immediate_count)
-        k3.metric("High Risk", high_risk_count)
-        k4.metric("Live Data %", f"{live_ratio}%")
-
-        st.caption(f"Top topic: {top_topic}")
-
-        # ========================================================
-        # MAIN VISUALS
-        # ========================================================
         g1, g2 = st.columns(2)
 
         with g1:
-            st.markdown("**Topic Distribution**")
             if "topic" in fr:
                 fig_topic = px.pie(
                     fr["topic"],
                     names="topic",
                     values="count",
-                    hole=0.52
+                    hole=0.5
                 )
                 fig_topic.update_layout(
                     margin=dict(t=10, b=10, l=10, r=10),
-                    height=320,
-                    legend_title_text="",
+                    height=300,
+                    legend_title_text=""
                 )
                 st.plotly_chart(fig_topic, use_container_width=True)
 
         with g2:
-            st.markdown("**Priority Mix**")
             if "pri" in fr:
                 fig_pri = px.bar(
                     fr["pri"],
@@ -1125,7 +1107,7 @@ def render_overview(filtered, ct):
                 )
                 fig_pri.update_layout(
                     margin=dict(t=10, b=10, l=10, r=10),
-                    height=320,
+                    height=300,
                     showlegend=False,
                     xaxis_title="",
                     yaxis_title=""
@@ -1133,101 +1115,8 @@ def render_overview(filtered, ct):
                 fig_pri.update_traces(textposition="outside")
                 st.plotly_chart(fig_pri, use_container_width=True)
 
-        # ========================================================
-        # SECONDARY VISUALS
-        # ========================================================
-        g3, g4 = st.columns(2)
-
-        with g3:
-            st.markdown("**Risk Distribution**")
-            if "risk" in fr:
-                fig_risk = px.bar(
-                    fr["risk"],
-                    x="risk_level",
-                    y="count",
-                    color="risk_level",
-                    text="count",
-                    color_discrete_map={
-                        "High": "#dc2626",
-                        "Medium": "#f59e0b",
-                        "Low": "#16a34a"
-                    }
-                )
-                fig_risk.update_layout(
-                    margin=dict(t=10, b=10, l=10, r=10),
-                    height=300,
-                    showlegend=False,
-                    xaxis_title="",
-                    yaxis_title=""
-                )
-                fig_risk.update_traces(textposition="outside")
-                st.plotly_chart(fig_risk, use_container_width=True)
-
-        with g4:
-            st.markdown("**Average Impact by Topic**")
-            if "score_topic" in fr:
-                fig_score = px.bar(
-                    fr["score_topic"],
-                    x="topic",
-                    y="impact_score",
-                    color="impact_score",
-                    text="impact_score",
-                    color_continuous_scale="OrRd"
-                )
-                fig_score.update_layout(
-                    margin=dict(t=10, b=10, l=10, r=10),
-                    height=300,
-                    showlegend=False,
-                    xaxis_title="",
-                    yaxis_title=""
-                )
-                fig_score.update_traces(textposition="outside")
-                st.plotly_chart(fig_score, use_container_width=True)
-
-        # ========================================================
-        # ACTION QUEUE
-        # ========================================================
-        st.markdown("**Top Urgent Items**")
-
-        urgent_df = filtered.copy()
-
-        sort_cols = []
-        ascending_flags = []
-
-        if "priority" in urgent_df.columns:
-            priority_rank = {"Immediate": 0, "Review": 1, "Monitor": 2}
-            urgent_df["priority_rank"] = urgent_df["priority"].map(priority_rank).fillna(99)
-            sort_cols.append("priority_rank")
-            ascending_flags.append(True)
-
-        if "impact_score" in urgent_df.columns:
-            sort_cols.append("impact_score")
-            ascending_flags.append(False)
-
-        if "confidence_score" in urgent_df.columns:
-            sort_cols.append("confidence_score")
-            ascending_flags.append(False)
-
-        if sort_cols:
-            urgent_df = urgent_df.sort_values(sort_cols, ascending=ascending_flags)
-
-        display_cols = []
-        for col in ["title", "source", "topic", "risk_level", "priority", "impact_score", "confidence_score", "url"]:
-            if col in urgent_df.columns:
-                display_cols.append(col)
-
-        show_df = urgent_df[display_cols].head(5).copy()
-
-        if "impact_score" in show_df.columns:
-            show_df["impact_score"] = show_df["impact_score"].round(1)
-
-        if "confidence_score" in show_df.columns:
-            show_df["confidence_score"] = show_df["confidence_score"].round(1)
-
-        st.dataframe(show_df, use_container_width=True)
-
     else:
-        st.info("No analytics available for the current filter selection.")
+        st.info("No analytics available.")
 # ================================================================
 # VIEW: ANALYTICS
 # ================================================================
