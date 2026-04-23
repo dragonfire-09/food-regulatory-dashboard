@@ -111,6 +111,25 @@ def add_to_watchlist(item):
         str(x.get("id", "")) == item_id and str(x.get("type", "")) == "watchlist"
         for x in work_items
     )
+    if exists:
+        return False
+
+    item["type"] = "watchlist"
+    item["status"] = "open"
+
+    work_items.append(item)
+    save_work_items(work_items)
+    return True
+
+def add_to_watchlist(item):
+    work_items = load_work_items()
+
+    item_id = str(item.get("id", ""))
+
+    exists = any(
+        str(x.get("id", "")) == item_id and str(x.get("type", "")) == "watchlist"
+        for x in work_items
+    )
 
     if exists:
         return False
