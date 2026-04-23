@@ -1480,19 +1480,33 @@ def render_card(row, idx, ct):
 # ================================================================
 def render_watchlist(filtered, ct):
     st.subheader("Watchlist")
+
     wl_ids = st.session_state.get("watchlist", [])
     if not wl_ids:
         st.info("Watchlist is empty. Add items from Updates view.")
         return
 
-    wl_df = filtered[filtered["id"].isin(wl_ids)] if "id" in filtered.columns else pd.DataFrame()
+    all_df = combine_data()
+
+    if all_df.empty:
+        st.warning("No data available.")
+        return
+
+    all_df = all_df.copy()
+    all_df["confidence_score"] = all_df.apply(calc_confidence, axis=1)
+    all_df["impact_score"] = all_df.apply(lambda r: calc_impact(r, ct), axis=1)
+    all_df["priority"] = all_df["impact_score"].apply(det_priority)
+    all_df["why_this_matters"] = all_df.apply(lambda r: get_why(r, ct), axis=1)
+
+    wl_df = all_df[all_df["id"].isin(wl_ids)] if "id" in all_df.columns else pd.DataFrame()
+
     if wl_df.empty:
-        st.warning("Watchlisted items not in current filters. Broaden filters.")
+        st.warning("Watchlist items exist, but they are not available in the current dataset.")
         return
 
     st.caption(f"{len(wl_df)} watchlisted item(s)")
 
-    for iv, r in wl_df.iterrows():
+    for _, r in wl_df.sort_values("impact_score", ascending=False).iterrows():
         rid = str(safe_val(r.get("id"), ""))
         rv = str(r.get("risk_level", "Low")).lower()
         bc = RISK_COLORS.get(rv, "#94a3b8")
@@ -1505,8 +1519,8 @@ def render_watchlist(filtered, ct):
         topic = safe_val(r.get("topic"), "Unknown")
         why = safe_val(r.get("why_this_matters"), "N/A")
         action = safe_val(r.get("recommended_action"), "N/A")
+        url = safe_val(r.get("url"), "")
 
-        # Card
         st.markdown(
             f'<div style="border-left:5px solid {bc};border-radius:14px;'
             f'padding:0.9rem 1rem;background:linear-gradient(135deg,#fffbeb 0%,#fff 100%);'
@@ -1537,14 +1551,24 @@ def render_watchlist(filtered, ct):
                 unsafe_allow_html=True,
             )
 
-        nc1, nc2 = st.columns([3, 1])
+        nc1, nc2, nc3 = st.columns([3, 1, 1])
         with nc1:
             ex = get_user_note(rid)
-            nn = st.text_input("Note", value=ex, key=f"wln-{rid}",
-                               placeholder="Add note...", label_visibility="collapsed")
+            nn = st.text_input(
+                "Note",
+                value=ex,
+                key=f"wln-{rid}",
+                placeholder="Add note...",
+                label_visibility="collapsed",
+            )
             if nn != ex:
                 save_user_note(rid, nn)
+
         with nc2:
+            if url and url != "n/a":
+                st.link_button("Source", url)
+
+        with nc3:
             if st.button("Remove WL", key=f"rmwl-{rid}"):
                 toggle_watchlist(rid)
                 st.rerun()
