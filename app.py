@@ -273,6 +273,13 @@ def refresh_live_data():
     efsa = fetch_efsa_updates()
     rasff = fetch_rasff_updates()
     items = efsa + rasff
+
+    # Canlı veri kontrolü
+    live_count = sum(1 for i in items if i.get("source_status") == "live")
+    fallback_count = sum(1 for i in items if i.get("source_status") == "fallback")
+    print(f"[REFRESH] Total: {len(items)} | Live: {live_count} | Fallback: {fallback_count}")
+    print(f"[REFRESH] EFSA: {len(efsa)} items | RASFF: {len(rasff)} items")
+
     save_json_records(LIVE_DATA_FILE, items)
     return items
 
