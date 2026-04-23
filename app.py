@@ -1481,100 +1481,73 @@ def render_card(row, idx, ct):
 def render_watchlist(filtered, ct):
     st.subheader("Watchlist")
 
-    wl_ids = st.session_state.get("watchlist", [])
-    if not wl_ids:
-        st.info("Watchlist is empty. Add items from Updates view.")
+    saved_items = load_watchlist_items()
+
+    if not saved_items:
+        st.info("Watchlist is empty. Add items from Overview.")
         return
 
-    all_df = combine_data()
+    st.caption(f"{len(saved_items)} saved watchlist item(s)")
 
-    if all_df.empty:
-        st.warning("No data available.")
-        return
+    for item in reversed(saved_items):
+        rid = str(item.get("id", ""))
+        title = safe_val(item.get("title"), "Untitled")
+        source = safe_val(item.get("source"), "Unknown")
+        pri = safe_val(item.get("priority"), "Monitor")
+        rv = str(safe_val(item.get("risk_level"), "Low")).lower()
+        url = safe_val(item.get("url"), "")
+        saved_at = safe_val(item.get("saved_at"), "n/a")
 
-    all_df = all_df.copy()
-    all_df["confidence_score"] = all_df.apply(calc_confidence, axis=1)
-    all_df["impact_score"] = all_df.apply(lambda r: calc_impact(r, ct), axis=1)
-    all_df["priority"] = all_df["impact_score"].apply(det_priority)
-    all_df["why_this_matters"] = all_df.apply(lambda r: get_why(r, ct), axis=1)
-
-    wl_df = all_df[all_df["id"].isin(wl_ids)] if "id" in all_df.columns else pd.DataFrame()
-
-    if wl_df.empty:
-        st.warning("Watchlist items exist, but they are not available in the current dataset.")
-        return
-
-    st.caption(f"{len(wl_df)} watchlisted item(s)")
-
-    for _, r in wl_df.sort_values("impact_score", ascending=False).iterrows():
-        rid = str(safe_val(r.get("id"), ""))
-        rv = str(r.get("risk_level", "Low")).lower()
         bc = RISK_COLORS.get(rv, "#94a3b8")
-        sc = r.get("impact_score", 0)
-        pri = safe_val(r.get("priority"), "Monitor")
-        conf = int(r.get("confidence_score", 0))
-        title = safe_val(r.get("title"), "Untitled")
-        source = safe_val(r.get("source"), "Unknown")
-        date_s = fmt_date(r.get("date"))
-        topic = safe_val(r.get("topic"), "Unknown")
-        why = safe_val(r.get("why_this_matters"), "N/A")
-        action = safe_val(r.get("recommended_action"), "N/A")
-        url = safe_val(r.get("url"), "")
+        r_bg = {"high": "#fee2e2", "medium": "#ffedd5", "low": "#dcfce7"}.get(rv, "#f1f5f9")
+        r_fg = {"high": "#b91c1c", "medium": "#c2410c", "low": "#15803d"}.get(rv, "#64748b")
+        p_bg = {"Immediate": "#fee2e2", "Review": "#fef3c7", "Monitor": "#dbeafe"}.get(pri, "#f1f5f9")
+        p_fg = {"Immediate": "#991b1b", "Review": "#92400e", "Monitor": "#1d4ed8"}.get(pri, "#64748b")
+        ps = "display:inline-block;padding:0.2rem 0.5rem;border-radius:999px;font-size:0.68rem;font-weight:700;"
 
         st.markdown(
             f'<div style="border-left:5px solid {bc};border-radius:14px;'
             f'padding:0.9rem 1rem;background:linear-gradient(135deg,#fffbeb 0%,#fff 100%);'
             f'box-shadow:0 4px 16px rgba(0,0,0,0.05);border:1px solid #e2e8f0;'
             f'border-right:3px solid #f59e0b;">'
-            f'<div style="display:flex;justify-content:space-between;align-items:flex-start;">'
-            f'<div style="font-size:0.98rem;font-weight:700;color:#0f172a;line-height:1.3;flex:1;">'
+            f'<div style="font-size:0.98rem;font-weight:700;color:#0f172a;line-height:1.3;">'
             f'[WL] {title}</div>'
-            f'<div style="background:#0f172a;color:white;border-radius:10px;padding:0.2rem 0.5rem;'
-            f'font-size:0.74rem;font-weight:700;margin-left:8px;">{sc}/10</div></div>'
-            f'<div style="font-size:0.78rem;color:#64748b;margin-top:0.2rem;">'
-            f'{source} &middot; {date_s} &middot; {topic}</div></div>',
+            f'<div style="font-size:0.78rem;color:#64748b;margin-top:0.25rem;">'
+            f'{source} &middot; Saved: {saved_at}</div>'
+            f'</div>',
             unsafe_allow_html=True,
         )
 
-        mc1, mc2, mc3 = st.columns(3)
-        mc1.caption(f"Priority: **{pri}**")
-        mc2.caption(f"Confidence: **{conf}**")
-        mc3.caption(f"Risk: **{rv.title()}**")
+        st.markdown(
+            f'<div style="display:flex;flex-wrap:wrap;gap:4px;margin:0.35rem 0;">'
+            f'<span style="{ps}background:#eef2ff;color:#4338ca;">{source}</span>'
+            f'<span style="{ps}background:{r_bg};color:{r_fg};">{rv.title()} Risk</span>'
+            f'<span style="{ps}background:{p_bg};color:{p_fg};">{pri}</span>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
 
-        bs = "margin-top:0.3rem;padding:0.4rem 0.6rem;background:#f8fafc;border-radius:8px;border:1px solid #f1f5f9;"
-        ts = "font-size:0.68rem;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:0.1rem;"
-        vs = "font-size:0.82rem;color:#1e293b;line-height:1.5;"
+        c1, c2 = st.columns([1, 1])
 
-        for label, text in [("Why This Matters", why), ("Recommended Action", action)]:
-            st.markdown(
-                f'<div style="{bs}"><div style="{ts}">{label}</div><div style="{vs}">{text}</div></div>',
-                unsafe_allow_html=True,
-            )
-
-        nc1, nc2, nc3 = st.columns([3, 1, 1])
-        with nc1:
-            ex = get_user_note(rid)
-            nn = st.text_input(
-                "Note",
-                value=ex,
-                key=f"wln-{rid}",
-                placeholder="Add note...",
-                label_visibility="collapsed",
-            )
-            if nn != ex:
-                save_user_note(rid, nn)
-
-        with nc2:
+        with c1:
             if url and url != "n/a":
                 st.link_button("Source", url)
 
-        with nc3:
-            if st.button("Remove WL", key=f"rmwl-{rid}"):
-                toggle_watchlist(rid)
+        with c2:
+            if st.button("Remove", key=f"rm-saved-{rid}-{saved_at}"):
+                items = load_watchlist_items()
+                items = [
+                    x for x in items
+                    if not (
+                        str(x.get("id", "")) == rid and
+                        str(x.get("saved_at", "")) == str(saved_at)
+                    )
+                ]
+                save_watchlist_items(items)
+                st.success("Removed from watchlist")
                 st.rerun()
 
         st.divider()
-
 
 # ================================================================
 # VIEW: COMPARISON
