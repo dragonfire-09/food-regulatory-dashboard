@@ -1036,16 +1036,14 @@ def render_overview(filtered, ct):
             )
             
            # --- Compact Client Insights (clickable) ---
-    st.subheader("Client Insights")
+        st.subheader("Client Insights")
 
     if filtered.empty:
         st.info("No data available.")
     else:
         ins = client_insights(filtered, ct)
-
         st.info(ins.get("headline", ""))
-        top_item_for_action = None
-    if not filtered.empty:
+
         top_item_for_action = filtered.sort_values(
             ["impact_score", "confidence_score"],
             ascending=False
@@ -1059,96 +1057,62 @@ def render_overview(filtered, ct):
 
         with c_next:
             st.caption("Next")
-
             next_step = ins.get("next_step", "")
             st.write(next_step)
 
-            b1, b2 = st.columns(2)
+            if st.button("Create Task", key=f"task_btn_{ct}_overview"):
+                task = {
+                    "created_at": datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC"),
+                    "client_type": ct,
+                    "title": f"Review: {top_item_for_action.get('title', 'Untitled')}",
+                    "next_step": next_step,
+                    "source": top_item_for_action.get("source", ""),
+                    "risk_level": top_item_for_action.get("risk_level", ""),
+                    "priority": top_item_for_action.get("priority", ""),
+                    "url": top_item_for_action.get("url", ""),
+                    "status": "Open"
+                }
 
-            with b1:
-                if st.button("Create Task", key="task_btn"):
-                    if top_item_for_action is not None:
-                        task = {
-                            "created_at": datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC"),
-                            "client_type": ct,
-                            "title": f"Review: {top_item_for_action.get('title', 'Untitled')}",
-                            "next_step": next_step,
-                            "source": top_item_for_action.get("source", ""),
-                            "risk_level": top_item_for_action.get("risk_level", ""),
-                            "priority": top_item_for_action.get("priority", ""),
-                            "url": top_item_for_action.get("url", ""),
-                            "status": "Open"
-                        }
+                add_task(task)
+                analytics["actions"] += 1
+                save_analytics(analytics)
+                st.success("Task created and saved")
 
-                        add_task(task)
-                        analytics["actions"] += 1
-                        save_analytics(analytics)
+        st.markdown("**Top relevant items**")
 
-                        st.success("Task created and saved")
-                    else:
-                        st.warning("No item available to create a task from.")
-                
-        with c_next:
-            st.caption("Next")
-    next_step = ins.get("next_step", "")
-    st.write(next_step)
+        top3 = filtered.sort_values(
+            ["impact_score", "confidence_score"],
+            ascending=False
+        ).head(3)
 
-    if st.button("Create Task", key="task_btn"):
-        if top_item_for_action is not None:
-            task = {
-                "created_at": datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC"),
-                "client_type": ct,
-                "title": f"Review: {top_item_for_action.get('title', 'Untitled')}",
-                "next_step": next_step,
-                "source": top_item_for_action.get("source", ""),
-                "risk_level": top_item_for_action.get("risk_level", ""),
-                "priority": top_item_for_action.get("priority", ""),
-                "url": top_item_for_action.get("url", ""),
-                "status": "Open"
-            }
-            add_task(task)
-            analytics["actions"] += 1
-            save_analytics(analytics)
-            st.success("Task created and saved")
-        else:
-            st.warning("No item available to create a task from.")
+        for _, r in top3.iterrows():
+            title = r.get("title", "Untitled")
+            why = r.get("why_this_matters", "")
+            url = r.get("url", "")
+            source = r.get("source", "")
+            risk = str(r.get("risk_level", "")).lower()
 
-    st.markdown("**Top relevant items**")
+            risk_label = ""
+            if risk == "high":
+                risk_label = "HIGH"
+            elif risk == "medium":
+                risk_label = "MED"
 
-    top3 = filtered.sort_values(
-        ["impact_score", "confidence_score"],
-        ascending=False
-    ).head(3)
+            box1, box2 = st.columns([6, 1])
 
-    for _, r in top3.iterrows():
-        title = r.get("title", "Untitled")
-        why = r.get("why_this_matters", "")
-        url = r.get("url", "")
-        source = r.get("source", "")
-        risk = str(r.get("risk_level", "")).lower()
+            with box1:
+                if url and str(url).strip():
+                    st.markdown(f"**[{title} ↗]({url})**")
+                else:
+                    st.markdown(f"**{title}**")
+                st.write(why)
+                st.caption(source)
 
-        risk_label = ""
-        if risk == "high":
-            risk_label = "HIGH"
-        elif risk == "medium":
-            risk_label = "MED"
+            with box2:
+                if risk_label:
+                    st.metric("Risk", risk_label)
 
-        box1, box2 = st.columns([6, 1])
-
-        with box1:
-            if url and str(url).strip():
-                st.markdown(f"**[{title} ↗]({url})**")
-            else:
-                st.markdown(f"**{title}**")
-
-            st.write(why)
-            st.caption(source)
-
-        with box2:
-            if risk_label:
-                st.metric("Risk", risk_label)
-
-        st.divider()
+            st.divider()
 
     render_urgent(filtered)
     render_timeline(filtered)
