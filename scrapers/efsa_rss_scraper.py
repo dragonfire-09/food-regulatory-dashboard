@@ -48,7 +48,7 @@ def build_business_impact(risk_level, topic):
     if topic == "Traceability":
         return "This may affect documentation consistency and supply chain visibility."
     if topic == "Fraud":
-        return "This may influence provenance checks, claim substantiation, and supplier verification."
+        return "This may influence provenance checks and supplier verification."
     if topic == "Contaminants":
         return "This may affect supplier review, testing assumptions, and product risk assessments."
     return "This may affect QA workflows, specifications, and operational risk exposure."
@@ -56,16 +56,16 @@ def build_business_impact(risk_level, topic):
 
 def build_recommended_action(risk_level, topic):
     if risk_level == "High":
-        return "Review the update promptly and determine whether internal escalation or additional controls are required."
+        return "Review the update promptly and determine whether internal escalation is required."
     if topic == "Labeling":
-        return "Review current labels and determine whether any guidance, claims, or declarations need attention."
+        return "Review current labels and determine whether any declarations need attention."
     if topic == "Traceability":
-        return "Review traceability documentation and assess whether any process updates are needed."
+        return "Review traceability documentation and assess whether process updates are needed."
     if topic == "Fraud":
         return "Review provenance and supplier documentation for any control gaps."
     if topic == "Contaminants":
-        return "Review supplier controls, testing assumptions, and relevance to your product categories."
-    return "Review the update and determine whether internal guidance or monitoring actions are needed."
+        return "Review supplier controls and relevance to your product categories."
+    return "Review the update and determine whether monitoring actions are needed."
 
 
 def fallback_efsa_examples():
@@ -73,13 +73,13 @@ def fallback_efsa_examples():
     return [
         {
             "id": "efsa-fallback-1",
-            "title": "EFSA fallback sample: no live RSS items returned",
+            "title": "EFSA fallback: no live RSS items returned",
             "source": "EFSA",
             "date": datetime.utcnow().strftime("%Y-%m-%d"),
             "jurisdiction": "EU",
             "topic": "Food Safety",
             "risk_level": "Low",
-            "ai_summary": "No live EFSA RSS items were returned at fetch time.",
+            "ai_summary": "No live EFSA RSS items were returned.",
             "business_impact": "This is a fallback sample.",
             "recommended_action": "Check the EFSA feed URL and retry.",
             "raw_text": "Fallback EFSA sample record.",
@@ -97,6 +97,7 @@ def fetch_efsa_updates(limit=10):
         feed = feedparser.parse(EFSA_RSS_URL)
 
         if not feed.entries:
+            print("[EFSA] No entries found in RSS feed")
             return fallback_efsa_examples()
 
         results = []
@@ -110,7 +111,6 @@ def fetch_efsa_updates(limit=10):
 
             pp = entry.get("published_parsed") or entry.get("updated_parsed")
             date_str = normalize_date(pp) if pp else datetime.utcnow().strftime("%Y-%m-%d")
-
             link = entry.get("link", "https://www.efsa.europa.eu/")
 
             results.append({
@@ -132,7 +132,9 @@ def fetch_efsa_updates(limit=10):
                 "last_verified": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
             })
 
+        print(f"[EFSA] Fetched {len(results)} live items")
         return results if results else fallback_efsa_examples()
 
-    except Exception:
+    except Exception as e:
+        print(f"[EFSA] Error: {e}")
         return fallback_efsa_examples()
