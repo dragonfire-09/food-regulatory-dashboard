@@ -1450,7 +1450,7 @@ def render_card(row, idx, ct):
 def render_watchlist(filtered, ct):
     st.subheader("Watchlist")
 
-    saved_items = load_watchlist_items()
+    save_watchlist(items)
 
     if not saved_items:
         st.info("Watchlist is empty. Add items from Overview.")
