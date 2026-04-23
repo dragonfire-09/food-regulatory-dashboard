@@ -918,27 +918,6 @@ def render_overview(filtered, ct):
         unsafe_allow_html=True,
     )
     
-    if not filtered.empty:
-       top3 = filtered.sort_values(
-        ["impact_score", "confidence_score"],
-        ascending=False
-    ).head(3)
-
-    items_html = ""
-
-    for _, row in top3.iterrows():
-        items_html += f"""
-        <div style="margin-bottom:0.7rem;">
-            <div style="font-weight:700;color:#0f172a;font-size:0.9rem;">
-                {row.get("title", "Untitled")}
-            </div>
-            <div style="font-size:0.86rem;color:#475569;line-height:1.5;">
-                {row.get("why_this_matters", "No explanation available.")}
-            </div>
-        </div>
-        """
-
-    st.markdown(items_html, unsafe_allow_html=True)
     st.markdown(
         f"""
         <div style="
