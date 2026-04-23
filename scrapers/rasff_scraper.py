@@ -1,11 +1,13 @@
-import requests
+import feedparser
 from datetime import datetime
+import sys
+import re
 
-RASFF_API_URL = "https://webgate.ec.europa.eu/rasff-window/backend/shared/notifications"
-HEADERS = {
-    "User-Agent": "Mozilla/5.0 (compatible; FoodRegDashboard/1.0)",
-    "Accept": "application/json",
-}
+RASFF_RSS_URL = "https://webgate.ec.europa.eu/rasff-window/backend/public/notifications/rss"
+RASFF_RSS_ALT = "https://webgate.ec.europa.eu/rasff-window/portal/backend/notification/rss"
+RASFF_ATOM_URL = "https://webgate.ec.europa.eu/rasff-window/consumers/notifications/atom"
+
+RASFF_PORTAL = "https://webgate.ec.europa.eu/rasff-window/screen/list"
 
 
 def detect_topic(text):
@@ -37,6 +39,37 @@ def detect_risk(text):
     return "Low"
 
 
+def normalize_date(struct_time_obj):
+    try:
+        return datetime(*struct_time_obj[:6]).strftime("%Y-%m-%d")
+    except Exception:
+        return datetime.utcnow().strftime("%Y-%m-%d")
+
+
+def safe_summary(entry):
+    summary = entry.get("summary", "") or entry.get("description", "") or ""
+    return summary.replace("\n", " ").strip()[:2000]
+
+
+def extract_reference(entry):
+    title = entry.get("title", "")
+    link = entry.get("link", "")
+
+    ref_match = re.search(r"(\d{4}\.\d{4})", title)
+    if ref_match:
+        return ref_match.group(1)
+
+    ref_match = re.search(r"(\d{4}\.\d{4})", link)
+    if ref_match:
+        return ref_match.group(1)
+
+    ref_match = re.search(r"/notification/(\d+)", link)
+    if ref_match:
+        return ref_match.group(1)
+
+    return None
+
+
 def fallback_rasff_examples():
     now_str = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
     return [
@@ -52,7 +85,7 @@ def fallback_rasff_examples():
             "business_impact": "This is a fallback record.",
             "recommended_action": "Check RASFF portal manually.",
             "raw_text": "Fallback RASFF record.",
-            "url": "https://webgate.ec.europa.eu/rasff-window/screen/list",
+            "url": RASFF_PORTAL,
             "notification_reference": "n/a",
             "source_status": "fallback",
             "fetch_method": "fallback",
@@ -61,163 +94,82 @@ def fallback_rasff_examples():
     ]
 
 
-def fetch_rasff_updates(limit=10):
-    """RASFF backend API'den bildirim çeker - birden fazla endpoint dener."""
-    import sys
-
-    endpoints = [
-        {
-            "name": "GET notifications",
-            "method": "GET",
-            "url": "https://webgate.ec.europa.eu/rasff-window/backend/shared/notifications",
-            "params": {"pageSize": str(limit), "page": "1"},
-            "json_body": None,
-        },
-        {
-            "name": "POST search",
-            "method": "POST",
-            "url": "https://webgate.ec.europa.eu/rasff-window/backend/shared/notifications/search",
-            "params": None,
-            "json_body": {"pageNumber": 1, "itemsPerPage": limit},
-        },
-        {
-            "name": "GET list",
-            "method": "GET",
-            "url": "https://webgate.ec.europa.eu/rasff-window/backend/shared/notifications/list",
-            "params": {"pageSize": str(limit)},
-            "json_body": None,
-        },
-        {
-            "name": "POST consolidated",
-            "method": "POST",
-            "url": "https://webgate.ec.europa.eu/rasff-window/backend/shared/notifications/search/consolidated",
-            "params": None,
-            "json_body": {"pageNumber": 1, "itemsPerPage": limit},
-        },
-    ]
-
-    session = requests.Session()
-    session.headers.update(HEADERS)
-
-    for ep in endpoints:
-        try:
-            sys.stderr.write(f"[RASFF] Trying: {ep['name']} -> {ep['url']}\n")
-            sys.stderr.flush()
-
-            if ep["method"] == "GET":
-                resp = session.get(ep["url"], params=ep["params"], timeout=20)
-            else:
-                resp = session.post(
-                    ep["url"],
-                    json=ep["json_body"],
-                    headers={"Content-Type": "application/json"},
-                    timeout=20,
-                )
-
-            sys.stderr.write(f"[RASFF] {ep['name']} status: {resp.status_code}\n")
-            sys.stderr.flush()
-
-            if resp.status_code != 200:
-                continue
-
-            # JSON parse dene
-            try:
-                data = resp.json()
-            except Exception:
-                sys.stderr.write(f"[RASFF] {ep['name']} not JSON\n")
-                sys.stderr.flush()
-                continue
-
-            # Bildirimleri bul
-            notifications = []
-            if isinstance(data, list):
-                notifications = data
-            elif isinstance(data, dict):
-                for key in ["notifications", "content", "results", "data", "items"]:
-                    if key in data and isinstance(data[key], list):
-                        notifications = data[key]
-                        break
-
-            sys.stderr.write(f"[RASFF] {ep['name']} found {len(notifications)} items\n")
-            sys.stderr.flush()
-
-            if not notifications:
-                continue
-
-            # Parse et
-            results = []
-            for i, notif in enumerate(notifications[:limit]):
-                reference = str(
-                    notif.get("reference", "")
-                    or notif.get("notificationReference", "")
-                    or notif.get("id", "")
-                    or f"unknown-{i}"
-                )
-                subject = str(
-                    notif.get("subject", "")
-                    or notif.get("title", "")
-                    or notif.get("description", "")
-                    or "RASFF Notification"
-                )
-                notif_type = str(notif.get("notificationType", "") or "")
-                category = str(notif.get("category", "") or "")
-
-                date_raw = str(
-                    notif.get("notificationDate", "")
-                    or notif.get("date", "")
-                    or notif.get("ecValidFromDate", "")
-                    or ""
-                )
-                try:
-                    date_str = date_raw[:10] if len(date_raw) >= 10 else datetime.utcnow().strftime("%Y-%m-%d")
-                except Exception:
-                    date_str = datetime.utcnow().strftime("%Y-%m-%d")
-
-                combined_text = f"{subject} {category} {notif_type}"
-                topic = detect_topic(combined_text)
-                risk = detect_risk(combined_text)
-
-                title = f"{notif_type}: {subject}".strip(": ") if notif_type else subject
-
-                if risk == "High":
-                    impact = "May require immediate compliance escalation or product containment."
-                    action = "Assess exposure and review supplier controls."
-                elif risk == "Medium":
-                    impact = "May affect documentation, traceability, or labeling."
-                    action = "Review internal records."
-                else:
-                    impact = "Lower urgency but relevant for compliance review."
-                    action = "Monitor developments."
-
-                results.append({
-                    "id": f"rasff-{reference}",
-                    "title": title,
-                    "source": "RASFF",
-                    "date": date_str,
-                    "jurisdiction": "EU",
-                    "topic": topic,
-                    "risk_level": risk,
-                    "ai_summary": subject,
-                    "business_impact": impact,
-                    "recommended_action": action,
-                    "raw_text": combined_text,
-                    "url": f"https://webgate.ec.europa.eu/rasff-window/screen/notification/{reference}",
-                    "notification_reference": reference,
-                    "source_status": "live",
-                    "fetch_method": "rasff_api",
-                    "last_verified": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
-                })
-
-            if results:
-                sys.stderr.write(f"[RASFF] SUCCESS with {ep['name']}: {len(results)} items\n")
-                sys.stderr.flush()
-                return results
-
-        except Exception as e:
-            sys.stderr.write(f"[RASFF] {ep['name']} error: {e}\n")
-            sys.stderr.flush()
-            continue
-
-    sys.stderr.write("[RASFF] All endpoints failed, using fallback\n")
+def try_parse_feed(url, label):
+    sys.stderr.write(f"[RASFF] Trying RSS: {label} -> {url}\n")
     sys.stderr.flush()
-    return fallback_rasff_examples()
+
+    feed = feedparser.parse(url)
+    count = len(feed.entries) if feed.entries else 0
+
+    sys.stderr.write(f"[RASFF] {label}: {count} entries, bozo={feed.bozo}\n")
+    sys.stderr.flush()
+
+    if count > 0:
+        return feed
+    return None
+
+
+def fetch_rasff_updates(limit=10):
+    feed = None
+
+    for url, label in [
+        (RASFF_RSS_URL, "public_rss"),
+        (RASFF_RSS_ALT, "portal_rss"),
+        (RASFF_ATOM_URL, "consumers_atom"),
+    ]:
+        feed = try_parse_feed(url, label)
+        if feed:
+            break
+
+    if not feed or not feed.entries:
+        sys.stderr.write("[RASFF] All RSS feeds failed, using fallback\n")
+        sys.stderr.flush()
+        return fallback_rasff_examples()
+
+    results = []
+    for i, entry in enumerate(feed.entries[:limit]):
+        title = entry.get("title", "RASFF Notification").strip()
+        summary = safe_summary(entry)
+        link = entry.get("link", RASFF_PORTAL)
+        combined = f"{title} {summary}"
+
+        topic = detect_topic(combined)
+        risk = detect_risk(combined)
+
+        pp = entry.get("published_parsed") or entry.get("updated_parsed")
+        date_str = normalize_date(pp) if pp else datetime.utcnow().strftime("%Y-%m-%d")
+
+        reference = extract_reference(entry) or f"rasff-{i}-{date_str}"
+
+        if risk == "High":
+            impact = "May require immediate compliance escalation or product containment."
+            action = "Assess exposure and review supplier controls."
+        elif risk == "Medium":
+            impact = "May affect documentation, traceability, or labeling."
+            action = "Review internal records."
+        else:
+            impact = "Lower urgency but relevant for compliance review."
+            action = "Monitor developments."
+
+        results.append({
+            "id": f"rasff-{reference}",
+            "title": title,
+            "source": "RASFF",
+            "date": date_str,
+            "jurisdiction": "EU",
+            "topic": topic,
+            "risk_level": risk,
+            "ai_summary": summary if summary else title,
+            "business_impact": impact,
+            "recommended_action": action,
+            "raw_text": combined,
+            "url": link,
+            "notification_reference": reference,
+            "source_status": "live",
+            "fetch_method": "rss_feed",
+            "last_verified": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+        })
+
+    sys.stderr.write(f"[RASFF] SUCCESS: {len(results)} live items from RSS\n")
+    sys.stderr.flush()
+    return results if results else fallback_rasff_examples()
