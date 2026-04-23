@@ -1511,10 +1511,6 @@ if should_auto_refresh(LIVE_DATA_FILE, AUTO_REFRESH_MINUTES):
         
 df = combine_data()
 
-st.write(
-    "DEBUG - sources in dataframe:",
-    df["source"].value_counts(dropna=False) if not df.empty and "source" in df.columns else "No data"
-)
 
 if not df.empty:
     df["confidence_score"] = df.apply(calculate_confidence_score, axis=1)
