@@ -1716,7 +1716,6 @@ def render_intro_cards():
 
 # ========== METRIC CARDS ==========
 def render_metric_cards(filtered, client_type):
-    # --- SAFE METRICS ---
     if filtered is None or filtered.empty:
         total = immediate = review = avg_score = avg_conf = high_risk = topics = watchlist_count = 0
     else:
@@ -1733,6 +1732,32 @@ def render_metric_cards(filtered, client_type):
             1 for _, r in filtered.iterrows() if is_watchlisted(r.get("id", ""))
         )
 
+    cards = [
+        ("📋 Total Updates", total, None),
+        ("🔴 Immediate", immediate, "▲ attention" if immediate > 0 else "—"),
+        ("🟡 Review", review, None),
+        ("⚠️ High Risk", high_risk, "▲ attention" if high_risk > 2 else "—"),
+        ("📊 Avg Impact", avg_score, None),
+        ("🎯 Avg Confidence", avg_conf, None),
+        ("🏷️ Topics", topics, None),
+        ("⭐ Watchlist", watchlist_count, None),
+    ]
+
+    cols = st.columns(4)
+
+    for i, (label, value, delta) in enumerate(cards):
+        with cols[i % 4]:
+            st.markdown(
+                f"""
+                <div class="metric-card">
+                    <div class="metric-label">{label}</div>
+                    <div class="metric-value">{value}</div>
+                    {f'<div class="metric-delta metric-delta-up">{delta}</div>' if delta and 'attention' in delta else ''}
+                    {f'<div class="metric-delta metric-delta-neutral">{delta}</div>' if delta == '—' else ''}
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
     # --- CARD DEFINITIONS ---
     cards = [
         ("Total Updates", total, None, "📋"),
