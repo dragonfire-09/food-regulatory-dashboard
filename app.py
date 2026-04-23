@@ -919,9 +919,13 @@ def render_overview(filtered, ct):
     )
     
     if not filtered.empty:
-    top3 = filtered.sort_values(["impact_score", "confidence_score"], ascending=False).head(3)
+    top3 = filtered.sort_values(
+        ["impact_score", "confidence_score"],
+        ascending=False
+    ).head(3)
 
     items_html = ""
+
     for _, row in top3.iterrows():
         items_html += f"""
         <div style="margin-bottom:0.7rem;">
@@ -934,6 +938,7 @@ def render_overview(filtered, ct):
         </div>
         """
 
+    st.markdown(items_html, unsafe_allow_html=True)
     st.markdown(
         f"""
         <div style="
