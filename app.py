@@ -1052,7 +1052,7 @@ def render_reports(filtered, ct):
         s2.metric("Review", int((filtered["priority"] == "Review").sum()))
         s3.metric("Monitor", int((filtered["priority"] == "Monitor").sum()))
         
-    def render_updates(filtered, ct):
+  def render_updates(filtered, ct):
     st.subheader("Latest Regulatory Updates")
 
     q = st.text_input(
