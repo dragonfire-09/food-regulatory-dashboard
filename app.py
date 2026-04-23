@@ -1535,22 +1535,31 @@ with st.sidebar:
         ]
     )
 
-view_mode = st.radio(
-    "View",
-    ["Overview", "Analytics", "Reports", "Updates"]
-)
+    view_mode = st.radio(
+        "View",
+        ["Overview", "Analytics", "Reports", "Updates"]
+    )
 
-if st.button("🧪 Test EFSA Fetch", use_container_width=True):
-    with st.spinner("Testing EFSA RSS..."):
-        try:
-            efsa_test = fetch_efsa_updates()
-            st.write("EFSA fetch count:", len(efsa_test))
-            if efsa_test:
-                st.write("Sample:", efsa_test[:2])
-            else:
-                st.warning("No EFSA data returned")
-        except Exception as e:
-            st.error(f"EFSA test failed: {e}")
+    if st.button("🔄 Refresh Live Data", use_container_width=True):
+        with st.spinner("Fetching live updates from EFSA and RASFF..."):
+            try:
+                refresh_live_data()
+                st.success("Live data refreshed.")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Refresh failed: {e}")
+
+    if st.button("🧪 Test EFSA Fetch", use_container_width=True):
+        with st.spinner("Testing EFSA RSS..."):
+            try:
+                efsa_test = fetch_efsa_updates()
+                st.write("EFSA fetch count:", len(efsa_test))
+                if efsa_test:
+                    st.write("Sample:", efsa_test[:2])
+                else:
+                    st.warning("No EFSA data returned")
+            except Exception as e:
+                st.error(f"EFSA test failed: {e}")
 
     last_updated_relative = format_relative_update_time(LIVE_DATA_FILE)
     st.caption(f"Last updated: {last_updated_relative}")
@@ -1569,11 +1578,17 @@ if st.button("🧪 Test EFSA Fetch", use_container_width=True):
 
     st.markdown("## Filters")
 
+    selected_sources = []
+    selected_topics = []
+    selected_risks = []
+    selected_priorities = []
+    data_mode = "All"
+    min_confidence = 0
+
     if not df.empty:
         source_options = sorted(df["source"].dropna().astype(str).unique().tolist()) if "source" in df.columns else []
         topic_options = sorted(df["topic"].dropna().astype(str).unique().tolist()) if "topic" in df.columns else []
         risk_options = sorted(df["risk_level"].dropna().astype(str).unique().tolist()) if "risk_level" in df.columns else []
-        status_options = sorted(df["source_status"].dropna().astype(str).unique().tolist()) if "source_status" in df.columns else []
         priority_options = sorted(df["priority"].dropna().astype(str).unique().tolist()) if "priority" in df.columns else []
 
         selected_sources = st.multiselect("Source", source_options, default=source_options)
