@@ -1086,27 +1086,30 @@ def render_overview(filtered, ct):
                 else:
                     st.warning("No item available to create a task from.")
 
-        with b2:
-            if st.button("Watchlist", key="watch_btn"):
-                if top_item_for_action is not None:
-                    watch_item = {
-                        "id": str(top_item_for_action.get("id", "")),
-                        "saved_at": datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC"),
-                        "title": top_item_for_action.get("title", "Untitled"),
-                        "source": top_item_for_action.get("source", ""),
-                        "risk_level": top_item_for_action.get("risk_level", ""),
-                        "priority": top_item_for_action.get("priority", ""),
-                        "url": top_item_for_action.get("url", "")
-                    }
-                    added = add_to_watchlist(watch_item)
-                    if added:
-                        analytics["actions"] += 1
-                        save_analytics(analytics)
-                        st.success("Added to watchlist")
-                    else:
-                        st.info("Already in watchlist")
-                else:
-                    st.warning("No item available to watchlist.")
+        with c_next:
+    st.caption("Next")
+    next_step = ins.get("next_step", "")
+    st.write(next_step)
+
+    if st.button("Create Task", key="task_btn"):
+        if top_item_for_action is not None:
+            task = {
+                "created_at": datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC"),
+                "client_type": ct,
+                "title": f"Review: {top_item_for_action.get('title', 'Untitled')}",
+                "next_step": next_step,
+                "source": top_item_for_action.get("source", ""),
+                "risk_level": top_item_for_action.get("risk_level", ""),
+                "priority": top_item_for_action.get("priority", ""),
+                "url": top_item_for_action.get("url", ""),
+                "status": "Open"
+            }
+            add_task(task)
+            analytics["actions"] += 1
+            save_analytics(analytics)
+            st.success("Task created and saved")
+        else:
+            st.warning("No item available to create a task from.")
 
     st.markdown("**Top relevant items**")
 
