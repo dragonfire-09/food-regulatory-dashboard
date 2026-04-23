@@ -1044,6 +1044,12 @@ def render_overview(filtered, ct):
         ins = client_insights(filtered, ct)
 
         st.info(ins.get("headline", ""))
+            top_item_for_action = None
+    if not filtered.empty:
+        top_item_for_action = filtered.sort_values(
+            ["impact_score", "confidence_score"],
+            ascending=False
+        ).iloc[0]
 
         c_focus, c_next = st.columns(2)
 
