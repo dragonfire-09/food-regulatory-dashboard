@@ -1693,12 +1693,12 @@ with st.sidebar:
         format_func=lambda x: f"{CLIENT_ICONS.get(x, '')} {x}",
     )
 
- view_mode = st.radio(
-    "View",
-    ["Overview", "Updates", "Analytics", "Reports", "Watchlist", "Worklist", "Comparison"]
-)
+    view_mode = st.radio(
+        "View",
+        ["Overview", "Updates", "Analytics", "Reports", "Watchlist", "Worklist", "Comparison"]
+    )
 
-st.divider()
+    st.divider()
 
     if st.button("Refresh Live Data", width="stretch"):
         with st.spinner("Fetching from EFSA & RASFF..."):
@@ -1709,7 +1709,6 @@ st.divider()
                 st.rerun()
             except Exception as e:
                 st.error(f"Failed: {e}")
-
     last_upd = format_relative_time(LIVE_DATA_FILE)
     st.caption(f"Last updated: {last_upd}")
 
