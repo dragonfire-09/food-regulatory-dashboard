@@ -904,6 +904,77 @@ def render_overview(filtered, ct):
     c4.metric("High Risk", high)
     c5.metric("Avg Impact", f"{avg}/10")
 
+        st.caption("Need context? Expand below")
+
+    with st.expander("About this tool", expanded=False):
+        intro1, intro2, intro3 = st.columns(3)
+
+        with intro1:
+            st.markdown(
+                """
+                <div style="
+                    background:#ffffff;
+                    border:1px solid #e2e8f0;
+                    border-radius:14px;
+                    padding:0.9rem;
+                    min-height:140px;
+                ">
+                    <div style="font-size:0.95rem;margin-bottom:0.3rem;">🔎</div>
+                    <div style="font-size:0.9rem;font-weight:700;color:#0f172a;margin-bottom:0.3rem;">
+                        What it does
+                    </div>
+                    <div style="font-size:0.82rem;color:#475569;">
+                        Converts regulatory updates into structured, actionable insights.
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+        with intro2:
+            st.markdown(
+                """
+                <div style="
+                    background:#ffffff;
+                    border:1px solid #e2e8f0;
+                    border-radius:14px;
+                    padding:0.9rem;
+                    min-height:140px;
+                ">
+                    <div style="font-size:0.95rem;margin-bottom:0.3rem;">⚡</div>
+                    <div style="font-size:0.9rem;font-weight:700;color:#0f172a;margin-bottom:0.3rem;">
+                        Why it matters
+                    </div>
+                    <div style="font-size:0.82rem;color:#475569;">
+                        Turns information into decisions: urgency, risk, and next steps.
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+        with intro3:
+            st.markdown(
+                """
+                <div style="
+                    background:#ffffff;
+                    border:1px solid #e2e8f0;
+                    border-radius:14px;
+                    padding:0.9rem;
+                    min-height:140px;
+                ">
+                    <div style="font-size:0.95rem;margin-bottom:0.3rem;">📈</div>
+                    <div style="font-size:0.9rem;font-weight:700;color:#0f172a;margin-bottom:0.3rem;">
+                        Why it scales
+                    </div>
+                    <div style="font-size:0.82rem;color:#475569;">
+                        Supports alerts, monitoring, reporting, and AI-driven workflows.
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
            # --- Compact Client Insights (clickable) ---
     st.subheader("Client Insights")
 
