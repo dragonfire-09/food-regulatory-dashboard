@@ -1481,62 +1481,62 @@ def render_analytics(filtered):
             fig = px.bar(fr["src"], x="source", y="count", title="By Source",
                          color="count", color_continuous_scale="Blues")
             fig.update_layout(showlegend=False, margin=dict(t=40, b=20))
-            c1.plotly_chart(fig, use_container_width=True)
+            c1.plotly_chart(fig,  width="stretch")
         if "topic" in fr:
             fig = px.pie(fr["topic"], names="topic", values="count", title="Topics", hole=0.4)
             fig.update_layout(margin=dict(t=40, b=20))
-            c2.plotly_chart(fig, use_container_width=True)
+            c2.plotly_chart(fig,  width="stretch")
         c3, c4 = st.columns(2)
         if "pri" in fr:
             fig = px.bar(fr["pri"], x="priority", y="count", title="Priority",
                          color="priority", color_discrete_map=PRIORITY_COLORS)
             fig.update_layout(showlegend=False, margin=dict(t=40, b=20))
-            c3.plotly_chart(fig, use_container_width=True)
+            c3.plotly_chart(fig,  width="stretch")
         if "risk" in fr:
             fig = px.bar(fr["risk"], x="risk_level", y="count", title="Risk",
                          color="risk_level",
                          color_discrete_map={"High": "#dc2626", "Medium": "#f59e0b", "Low": "#16a34a"})
             fig.update_layout(showlegend=False, margin=dict(t=40, b=20))
-            c4.plotly_chart(fig, use_container_width=True)
+            c4.plotly_chart(fig,  width="stretch")
         c5, c6 = st.columns(2)
         if "score_topic" in fr:
             fig = px.bar(fr["score_topic"], x="topic", y="impact_score",
                          title="Avg Impact by Topic", color="impact_score", color_continuous_scale="OrRd")
             fig.update_layout(showlegend=False, margin=dict(t=40, b=20))
-            c5.plotly_chart(fig, use_container_width=True)
+            c5.plotly_chart(fig,  width="stretch")
         if "conf_src" in fr:
             fig = px.bar(fr["conf_src"], x="source", y="confidence_score",
                          title="Avg Confidence by Source", color="confidence_score", color_continuous_scale="Greens")
             fig.update_layout(showlegend=False, margin=dict(t=40, b=20))
-            c6.plotly_chart(fig, use_container_width=True)
+            c6.plotly_chart(fig,  width="stretch")
     with t2:
         if "heatmap" in fr:
             piv = fr["heatmap"].pivot_table(index="topic", columns="risk_level", values="count", fill_value=0)
             fig = px.imshow(piv, text_auto=True, aspect="auto", title="Topic x Risk",
                             color_continuous_scale="YlOrRd")
             fig.update_layout(margin=dict(t=50, b=20))
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig,  width="stretch")
         if "scatter" in fr:
             fig = px.scatter(fr["scatter"], x="impact_score", y="confidence_score",
                              color="risk_level", hover_data=["title", "source", "topic"],
                              title="Impact vs Confidence",
                              color_discrete_map={"High": "#dc2626", "Medium": "#f59e0b", "Low": "#16a34a"})
             fig.update_layout(margin=dict(t=50, b=20))
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig,  width="stretch")
     with t3:
         if "trend" in fr and not fr["trend"].empty:
             fig = px.area(fr["trend"], x="date_only", y="count", title="Volume Over Time", markers=True)
             fig.update_layout(margin=dict(t=40, b=20))
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig,  width="stretch")
         if "status" in fr:
             fig = px.pie(fr["status"], names="source_status", values="count", title="Data Status", hole=0.4)
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig,  width="stretch")
     with t4:
         if "jur" in fr and not fr["jur"].empty:
             fig = px.bar(fr["jur"], x="jurisdiction", y="count", title="By Jurisdiction",
                          color="count", color_continuous_scale="Viridis")
             fig.update_layout(margin=dict(t=40, b=20))
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig,  width="stretch")
         else:
             st.info("No jurisdiction data.")
 
