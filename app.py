@@ -270,11 +270,46 @@ def save_json_records(path: Path, records):
 
 
 def refresh_live_data():
+    import requests
+
+    # RASFF API test
+    print("[DEBUG] Testing RASFF API...")
+    try:
+        test_url = (
+            "https://webgate.ec.europa.eu/rasff-window/backend"
+            "/shared/notifications/search/consolidated"
+        )
+        test_resp = requests.post(
+            test_url,
+            json={"pageNumber": 1, "itemsPerPage": 3},
+            headers={
+                "User-Agent": "Mozilla/5.0",
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+            },
+            timeout=25,
+        )
+        print(f"[DEBUG] RASFF status: {test_resp.status_code}")
+        print(f"[DEBUG] RASFF response: {test_resp.text[:500]}")
+    except Exception as e:
+        print(f"[DEBUG] RASFF error: {e}")
+
+    # EFSA test
+    print("[DEBUG] Testing EFSA RSS...")
+    try:
+        import feedparser
+        feed = feedparser.parse("https://www.efsa.europa.eu/en/press/rss")
+        print(f"[DEBUG] EFSA entries: {len(feed.entries)}")
+        if feed.entries:
+            print(f"[DEBUG] EFSA first title: {feed.entries[0].get('title', 'no title')}")
+    except Exception as e:
+        print(f"[DEBUG] EFSA error: {e}")
+
+    # Normal fetch
     efsa = fetch_efsa_updates()
     rasff = fetch_rasff_updates()
     items = efsa + rasff
 
-    # Canlı veri kontrolü
     live_count = sum(1 for i in items if i.get("source_status") == "live")
     fallback_count = sum(1 for i in items if i.get("source_status") == "fallback")
     print(f"[REFRESH] Total: {len(items)} | Live: {live_count} | Fallback: {fallback_count}")
