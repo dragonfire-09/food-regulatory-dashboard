@@ -914,13 +914,16 @@ def render_overview(filtered, ct):
 
         st.info(ins.get("headline", ""))
 
-        c_focus, c_next = st.columns(2)
-        with c_focus:
-            st.caption("Focus")
-            st.write(ins.get("focus", ""))
-        with c_next:
+       c_focus, c_next = st.columns(2)
+
+with c_focus:
+    st.caption("Focus")
+    st.write(ins.get("focus", ""))
+
+with c_next:
     st.caption("Next")
-   next_step = ins.get("next_step", "")
+
+    next_step = ins.get("next_step", "")
     st.write(next_step)
 
     b1, b2 = st.columns(2)
@@ -932,8 +935,8 @@ def render_overview(filtered, ct):
     with b2:
         if st.button("Watchlist", key="watch_btn"):
             st.success("Added to watchlist")
-            
-        st.markdown("**Top relevant items**")
+
+st.markdown("**Top relevant items**")
 
         top3 = filtered.sort_values(
             ["impact_score", "confidence_score"],
