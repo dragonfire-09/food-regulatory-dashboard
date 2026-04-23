@@ -1693,8 +1693,9 @@ with st.sidebar:
         format_func=lambda x: f"{CLIENT_ICONS.get(x, '')} {x}",
     )
 
-    view_mode = st.radio("View",
-                         ["Overview", "Updates", "Analytics", "Reports", "Worklist", "Comparison"]
+    view_mode = st.radio(
+    "View",["Overview", "Updates", "Analytics", "Reports", "Worklist", "Comparison"]
+)
 
     st.divider()
 
