@@ -1095,41 +1095,41 @@ def render_overview(filtered, ct):
 
         c_focus, c_next = st.columns(2)
 
-        with c_focus:
-            st.caption("Focus")
-            st.write(ins.get("focus", ""))
+with c_focus:
+    st.caption("Focus")
+    st.write(ins.get("focus", ""))
 
-               with c_next:
-            st.caption("Next")
+with c_next:
+    st.caption("Next")
 
-            next_step = ins.get("next_step", "")
-            st.write(next_step)
+    next_step = ins.get("next_step", "")
+    st.write(next_step)
 
-            if st.button("Create Task", key=f"task_btn_{ct}_overview"):
-                if top_item_for_action is not None:
+    if st.button("Create Task", key=f"task_btn_{ct}_overview"):
+        if top_item_for_action is not None:
 
-                    item = {
-                        "id": str(top_item_for_action.get("id", "")),
-                        "type": "task",
-                        "status": "open",
-                        "created_at": datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC"),
-                        "client_type": ct,
-                        "title": f"Review: {top_item_for_action.get('title', 'Untitled')}",
-                        "source": top_item_for_action.get("source", ""),
-                        "risk_level": top_item_for_action.get("risk_level", ""),
-                        "priority": top_item_for_action.get("priority", ""),
-                        "next_step": next_step,
-                        "url": top_item_for_action.get("url", ""),
-                    }
+            item = {
+                "id": str(top_item_for_action.get("id", "")),
+                "type": "task",
+                "status": "open",
+                "created_at": datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC"),
+                "client_type": ct,
+                "title": f"Review: {top_item_for_action.get('title', 'Untitled')}",
+                "source": top_item_for_action.get("source", ""),
+                "risk_level": top_item_for_action.get("risk_level", ""),
+                "priority": top_item_for_action.get("priority", ""),
+                "next_step": next_step,
+                "url": top_item_for_action.get("url", ""),
+            }
 
-                    added = add_work_item(item)
+            added = add_work_item(item)
 
-                    if added:
-                        analytics["actions"] += 1
-                        save_analytics(analytics)
-                        st.success("Task created")
-                    else:
-                        st.info("Task already exists")
+            if added:
+                analytics["actions"] += 1
+                save_analytics(analytics)
+                st.success("Task created")
+            else:
+                st.info("Task already exists")
 
         st.markdown("**Top relevant items**")
 
