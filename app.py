@@ -1221,7 +1221,7 @@ def render_overview(filtered, ct):
     # ============================================================
     # Quick Analytics
     # ============================================================
-    st.subheader("Quick Analytics")
+       st.subheader("Quick Analytics")
 
     if not filtered.empty:
         fr = get_frames(filtered)
@@ -1250,7 +1250,11 @@ def render_overview(filtered, ct):
                     height=300,
                     legend_title_text=""
                 )
-                st.plotly_chart(fig_topic, use_container_width=True)
+                st.plotly_chart(
+                    fig_topic,
+                    use_container_width=True,
+                    key=f"overview_topic_{ct}"
+                )
 
         with g2:
             if "pri" in fr:
@@ -1270,8 +1274,11 @@ def render_overview(filtered, ct):
                     yaxis_title=""
                 )
                 fig_pri.update_traces(textposition="outside")
-                st.plotly_chart(fig_pri, use_container_width=True)
-
+                st.plotly_chart(
+                    fig_pri,
+                    use_container_width=True,
+                    key=f"overview_priority_{ct}"
+                )
     else:
         st.info("No analytics available.")
 # ================================================================
