@@ -2127,6 +2127,12 @@ if not df.empty:
 
 render_hero(client_type, last_upd, h_total, h_imm, h_avg, h_live)
 
+# Executive Trend Bar
+t1, t2, t3, t4 = st.columns(4)
+t1.metric("Trend", trend["trend_direction"])
+t2.metric("Risk Velocity", trend["risk_velocity"])
+t3.metric("Recent (3d)", f"{trend['recent_count']} items")
+t4.metric("New vs Prior", trend["new_vs_old"])
 if auto_msg:
     if auto_triggered:
         st.success(auto_msg)
