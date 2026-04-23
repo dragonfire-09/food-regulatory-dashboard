@@ -291,10 +291,10 @@ def ensure_metadata_fields(df):
     return df
 
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=120)
 def combine_data():
-    base = load_json_records(BASE_DATA_FILE)
     live = load_json_records(LIVE_DATA_FILE)
+    base = load_json_records(BASE_DATA_FILE)
     all_rec = live + base
     if not all_rec:
         return pd.DataFrame()
