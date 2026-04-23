@@ -1460,10 +1460,11 @@ def render_card(row, idx, ct):
 def render_watchlist(filtered, ct):
     st.subheader("Watchlist")
 
-    save_watchlist(items)
+    work_items = load_work_items()
+    saved_items = [x for x in work_items if str(x.get("type", "")) == "watchlist"]
 
     if not saved_items:
-        st.info("Watchlist is empty. Add items from Overview.")
+        st.info("Watchlist is empty.")
         return
 
     st.caption(f"{len(saved_items)} saved watchlist item(s)")
@@ -1475,7 +1476,7 @@ def render_watchlist(filtered, ct):
         pri = safe_val(item.get("priority"), "Monitor")
         rv = str(safe_val(item.get("risk_level"), "Low")).lower()
         url = safe_val(item.get("url"), "")
-        saved_at = safe_val(item.get("saved_at"), "n/a")
+        created_at = safe_val(item.get("created_at"), "n/a")
 
         bc = RISK_COLORS.get(rv, "#94a3b8")
         r_bg = {"high": "#fee2e2", "medium": "#ffedd5", "low": "#dcfce7"}.get(rv, "#f1f5f9")
@@ -1492,7 +1493,7 @@ def render_watchlist(filtered, ct):
             f'<div style="font-size:0.98rem;font-weight:700;color:#0f172a;line-height:1.3;">'
             f'[WL] {title}</div>'
             f'<div style="font-size:0.78rem;color:#64748b;margin-top:0.25rem;">'
-            f'{source} &middot; Saved: {saved_at}</div>'
+            f'{source} &middot; Saved: {created_at}</div>'
             f'</div>',
             unsafe_allow_html=True,
         )
@@ -1506,23 +1507,15 @@ def render_watchlist(filtered, ct):
             unsafe_allow_html=True,
         )
 
-        c1, c2 = st.columns([1, 1])
+        c1, c2 = st.columns(2)
 
         with c1:
             if url and url != "n/a":
                 st.link_button("Source", url)
 
         with c2:
-            if st.button("Remove", key=f"rm-saved-{rid}-{saved_at}"):
-                items = load_watchlist_items()
-                items = [
-                    x for x in items
-                    if not (
-                        str(x.get("id", "")) == rid and
-                        str(x.get("saved_at", "")) == str(saved_at)
-                    )
-                ]
-                save_watchlist_items(items)
+            if st.button("Remove", key=f"rm_wl_{rid}_{created_at}"):
+                remove_work_item(rid, "watchlist")
                 st.success("Removed from watchlist")
                 st.rerun()
 
