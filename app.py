@@ -1438,60 +1438,9 @@ def render_card(row, idx, ct):
 # ================================================================
 def render_watchlist(filtered, ct):
     st.subheader("Watchlist")
-def render_worklist():
-    st.subheader("Worklist")
-
-    items = load_work_items()
-
-    tasks = [x for x in items if str(x.get("type", "")).lower() == "task"]
-    watchlist_items = [x for x in items if str(x.get("type", "")).lower() == "watchlist"]
-
-    t1, t2 = st.tabs(["Tasks", "Saved Watchlist"])
-
-    with t1:
-        if not tasks:
-            st.info("No tasks yet.")
-        else:
-            for item in reversed(tasks):
-                rid = str(item.get("id", ""))
-                title = safe_val(item.get("title"), "Untitled")
-                status = safe_val(item.get("status"), "open")
-                source = safe_val(item.get("source"), "Unknown")
-                next_step = safe_val(item.get("next_step"), "")
-                url = safe_val(item.get("url"), "")
-
-                st.markdown(f"**{title}**")
-                st.caption(f"{source} • status: {status}")
-
-                if next_step:
-                    st.write(next_step)
-
-                c1, c2, c3 = st.columns(3)
-
-                with c1:
-                    if url and url != "n/a":
-                        st.link_button("Source", url)
-
-                with c2:
-                    if st.button("Done", key=f"done_task_{rid}"):
-                        update_work_item_status(rid, "task", "done")
-                        st.rerun()
-
-                with c3:
-                    if st.button("Delete", key=f"del_task_{rid}"):
-                        remove_work_item(rid, "task")
-                        st.rerun()
-
-                st.divider()
-
-    with t2:
-        if not watchlist_items:
-            st.info("No saved watchlist items yet.")
-        else:
-            st.dataframe(pd.DataFrame(watchlist_items), width="stretch")
 
     work_items = load_work_items()
-    saved_items = [x for x in work_items if str(x.get("type", "")) == "watchlist"]
+    saved_items = [x for x in work_items if str(x.get("type", "")).lower() == "watchlist"]
 
     if not saved_items:
         st.info("Watchlist is empty.")
@@ -1550,6 +1499,83 @@ def render_worklist():
                 st.rerun()
 
         st.divider()
+
+
+def render_worklist():
+    st.subheader("Worklist")
+
+    items = load_work_items()
+    tasks = [x for x in items if str(x.get("type", "")).lower() == "task"]
+    open_tasks = [x for x in tasks if str(x.get("status", "open")).lower() != "done"]
+    done_tasks = [x for x in tasks if str(x.get("status", "open")).lower() == "done"]
+
+    t1, t2 = st.tabs(["Open Tasks", "Done Tasks"])
+
+    with t1:
+        if not open_tasks:
+            st.info("No open tasks.")
+        else:
+            for item in reversed(open_tasks):
+                rid = str(item.get("id", ""))
+                title = safe_val(item.get("title"), "Untitled")
+                status = safe_val(item.get("status"), "open")
+                source = safe_val(item.get("source"), "Unknown")
+                next_step = safe_val(item.get("next_step"), "")
+                url = safe_val(item.get("url"), "")
+
+                st.markdown(f"**{title}**")
+                st.caption(f"{source} • status: {status}")
+
+                if next_step:
+                    st.write(next_step)
+
+                c1, c2, c3 = st.columns(3)
+
+                with c1:
+                    if url and url != "n/a":
+                        st.link_button("Source", url)
+
+                with c2:
+                    if st.button("Done", key=f"done_task_{rid}"):
+                        update_work_item_status(rid, "task", "done")
+                        st.rerun()
+
+                with c3:
+                    if st.button("Delete", key=f"del_task_{rid}"):
+                        remove_work_item(rid, "task")
+                        st.rerun()
+
+                st.divider()
+
+    with t2:
+        if not done_tasks:
+            st.info("No completed tasks.")
+        else:
+            for item in reversed(done_tasks):
+                rid = str(item.get("id", ""))
+                title = safe_val(item.get("title"), "Untitled")
+                source = safe_val(item.get("source"), "Unknown")
+                next_step = safe_val(item.get("next_step"), "")
+                url = safe_val(item.get("url"), "")
+
+                st.markdown(f"~~{title}~~")
+                st.caption(f"{source} • status: done")
+
+                if next_step:
+                    st.write(next_step)
+
+                c1, c2 = st.columns(2)
+
+                with c1:
+                    if url and url != "n/a":
+                        st.link_button("Source", url)
+
+                with c2:
+                    if st.button("Delete", key=f"del_done_task_{rid}"):
+                        remove_work_item(rid, "task")
+                        st.rerun()
+
+                st.divider()
 
 # ================================================================
 # VIEW: COMPARISON
