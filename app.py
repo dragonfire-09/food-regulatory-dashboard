@@ -35,6 +35,7 @@ def save_analytics(data):
 
 TASKS_FILE = "data/tasks.json"
 WATCHLIST_FILE = "data/watchlist.json"
+WORK_ITEMS_FILE = "data/work_items.json"
 
 def load_json_file(path, default):
     if not os.path.exists("data"):
