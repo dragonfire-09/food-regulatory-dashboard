@@ -917,6 +917,47 @@ def render_overview(filtered, ct):
         f'<strong>Next Step:</strong> {ins["next_step"]}</div></div>',
         unsafe_allow_html=True,
     )
+    if not filtered.empty:
+    top3 = filtered.sort_values(["impact_score", "confidence_score"], ascending=False).head(3)
+
+    items_html = ""
+    for _, row in top3.iterrows():
+        items_html += f"""
+        <div style="margin-bottom:0.7rem;">
+            <div style="font-weight:700;color:#0f172a;font-size:0.9rem;">
+                {row.get("title", "Untitled")}
+            </div>
+            <div style="font-size:0.86rem;color:#475569;line-height:1.5;">
+                {row.get("why_this_matters", "No explanation available.")}
+            </div>
+        </div>
+        """
+
+    st.markdown(
+        f"""
+        <div style="
+            background:#ffffff;
+            border:1px solid #e2e8f0;
+            border-radius:14px;
+            padding:1rem 1.1rem;
+            margin-bottom:0.9rem;
+            box-shadow:0 2px 8px rgba(15,23,42,0.04);
+        ">
+            <div style="
+                font-size:0.75rem;
+                font-weight:700;
+                color:#64748b;
+                text-transform:uppercase;
+                letter-spacing:0.05em;
+                margin-bottom:0.5rem;
+            ">
+                Why this matters
+            </div>
+            {items_html}
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
     render_urgent(filtered)
     render_timeline(filtered)
