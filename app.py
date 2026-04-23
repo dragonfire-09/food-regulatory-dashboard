@@ -1815,6 +1815,8 @@ elif view_mode == "Reports":
     render_reports(filtered, client_type)
 elif view_mode == "Watchlist":
     render_watchlist(filtered, client_type)
+elif view_mode == "Worklist":
+    render_worklist()
 elif view_mode == "Comparison":
     render_comparison(filtered, client_type)
 
