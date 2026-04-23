@@ -1051,42 +1051,42 @@ def render_overview(filtered, ct):
             ascending=False
         ).iloc[0]
 
-c_focus, c_next = st.columns(2)
+        c_focus, c_next = st.columns(2)
 
-with c_focus:
-    st.caption("Focus")
-    st.write(ins.get("focus", ""))
+        with c_focus:
+            st.caption("Focus")
+            st.write(ins.get("focus", ""))
 
-with c_next:
-    st.caption("Next")
+        with c_next:
+            st.caption("Next")
 
-    next_step = ins.get("next_step", "")
-    st.write(next_step)
+            next_step = ins.get("next_step", "")
+            st.write(next_step)
 
-    b1, b2 = st.columns(2)
+            b1, b2 = st.columns(2)
 
-    with b1:
-        if st.button("Create Task", key="task_btn"):
-            if top_item_for_action is not None:
-                task = {
-                    "created_at": datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC"),
-                    "client_type": ct,
-                    "title": f"Review: {top_item_for_action.get('title', 'Untitled')}",
-                    "next_step": next_step,
-                    "source": top_item_for_action.get("source", ""),
-                    "risk_level": top_item_for_action.get("risk_level", ""),
-                    "priority": top_item_for_action.get("priority", ""),
-                    "url": top_item_for_action.get("url", ""),
-                    "status": "Open"
-                }
+            with b1:
+                if st.button("Create Task", key="task_btn"):
+                    if top_item_for_action is not None:
+                        task = {
+                            "created_at": datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC"),
+                            "client_type": ct,
+                            "title": f"Review: {top_item_for_action.get('title', 'Untitled')}",
+                            "next_step": next_step,
+                            "source": top_item_for_action.get("source", ""),
+                            "risk_level": top_item_for_action.get("risk_level", ""),
+                            "priority": top_item_for_action.get("priority", ""),
+                            "url": top_item_for_action.get("url", ""),
+                            "status": "Open"
+                        }
 
-                add_task(task)
-                analytics["actions"] += 1
-                save_analytics(analytics)
+                        add_task(task)
+                        analytics["actions"] += 1
+                        save_analytics(analytics)
 
-                st.success("Task created and saved")
-            else:
-                st.warning("No item available to create a task from.")
+                        st.success("Task created and saved")
+                    else:
+                        st.warning("No item available to create a task from.")
                 
         with c_next:
             st.caption("Next")
