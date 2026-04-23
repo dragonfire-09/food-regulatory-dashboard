@@ -904,7 +904,7 @@ def render_overview(filtered, ct):
     c4.metric("High Risk", high)
     c5.metric("Avg Impact", f"{avg}/10")
 
-       st.caption("Need context? Expand below")
+    st.caption("Need context? Expand below")
 
     with st.expander("About this tool", expanded=False):
         intro1, intro2, intro3 = st.columns(3)
