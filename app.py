@@ -1131,11 +1131,8 @@ def render_overview(filtered, ct):
                 unsafe_allow_html=True,
             )
 
-    # ============================================================
-    # CLIENT INSIGHT
-    # ============================================================
-   def render_overview(filtered, ct):
-       st.subheader("Overview")
+       def render_overview(filtered, ct):
+           st.subheader("Overview")
 
     # ============================================================
     # EXECUTIVE BAR
