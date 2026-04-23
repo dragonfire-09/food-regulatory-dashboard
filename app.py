@@ -1401,7 +1401,7 @@ def render_card(row, idx, ct):
     sf = sanitize_fn(title)
     pdf = build_pdf(f"Alert - {title}", alert)
 
-        b1, b2, b3, b4, b5 = st.columns(5)
+    b1, b2, b3, b4, b5 = st.columns(5)
 
     with b1:
         work_items = load_work_items()
