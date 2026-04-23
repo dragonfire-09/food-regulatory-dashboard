@@ -904,21 +904,76 @@ def render_overview(filtered, ct):
     c4.metric("High Risk", high)
     c5.metric("Avg Impact", f"{avg}/10")
 
-    # Client insights
-    st.subheader("Client Insights")
+    # --- Compact Client Insights (clickable) ---
+st.subheader("Client Insights")
+
+if filtered.empty:
+    st.info("No data available.")
+else:
     ins = client_insights(filtered, ct)
-    trend_icon = {"up": "Trending Up", "down": "Trending Down", "stable": "Stable"}.get(ins["trend"], "Stable")
+
+    # Top 3 items (yüksek etki + güven)
+    top3 = filtered.sort_values(
+        ["impact_score", "confidence_score"],
+        ascending=False
+    ).head(3)
+
+    rows_html = ""
+    for _, r in top3.iterrows():
+        title = r.get("title", "Untitled")
+        why = r.get("why_this_matters", "")
+        url = r.get("url", "")
+        source = r.get("source", "")
+        risk = str(r.get("risk_level", "")).lower()
+
+        # küçük risk badge
+        risk_badge = ""
+        if risk == "high":
+            risk_badge = '<span style="background:#fee2e2;color:#991b1b;padding:2px 6px;border-radius:6px;font-size:0.7rem;margin-left:6px;">HIGH</span>'
+        elif risk == "medium":
+            risk_badge = '<span style="background:#fef3c7;color:#92400e;padding:2px 6px;border-radius:6px;font-size:0.7rem;margin-left:6px;">MED</span>'
+
+        link_html = f'<a href="{url}" target="_blank" style="text-decoration:none;color:#1d4ed8;">{title} ↗</a>' if url else title
+
+        rows_html += f"""
+        <div style="padding:0.55rem 0;border-bottom:1px dashed #e5e7eb;">
+            <div style="font-weight:600;font-size:0.88rem;color:#0f172a;">
+                {link_html}{risk_badge}
+            </div>
+            <div style="font-size:0.80rem;color:#475569;line-height:1.45;">
+                {why}
+            </div>
+            <div style="font-size:0.72rem;color:#94a3b8;margin-top:2px;">
+                {source}
+            </div>
+        </div>
+        """
+
+    # Trend ikon
+    trend_icon = {"up": "📈", "down": "📉", "stable": "➡️"}.get(ins.get("trend"), "➡️")
 
     st.markdown(
-        f'<div style="background:linear-gradient(135deg,#f0f9ff 0%,#f5f3ff 100%);'
-        f'border-radius:14px;padding:1.1rem;border:1px solid #e0e7ff;margin-bottom:0.8rem;">'
-        f'<div style="font-size:0.95rem;font-weight:700;color:#1e293b;margin-bottom:0.4rem;">'
-        f'[{trend_icon}] {ins["headline"]}</div>'
-        f'<div style="font-size:0.84rem;color:#475569;line-height:1.55;">'
-        f'<strong>Key Risk:</strong> {ins["key_risk"]}<br>'
-        f'<strong>Focus:</strong> {ins["focus"]}<br>'
-        f'<strong>Next Step:</strong> {ins["next_step"]}</div></div>',
-        unsafe_allow_html=True,
+        f"""
+        <div style="
+            background:linear-gradient(135deg,#f8fafc 0%,#eef2ff 100%);
+            border:1px solid #e2e8f0;
+            border-radius:14px;
+            padding:0.9rem 1rem;
+            margin-bottom:0.8rem;
+        ">
+            <div style="font-weight:700;font-size:0.9rem;color:#1e293b;margin-bottom:0.35rem;">
+                {trend_icon} {ins.get("headline","")}
+            </div>
+
+            <div style="font-size:0.78rem;color:#475569;margin-bottom:0.5rem;">
+                <b>Focus:</b> {ins.get("focus","")} &nbsp;•&nbsp;
+                <b>Next:</b> {ins.get("next_step","")}
+            </div>
+
+            {rows_html}
+        </div>
+        """,
+        unsafe_allow_html=True
     )
 
     # Why this matters
