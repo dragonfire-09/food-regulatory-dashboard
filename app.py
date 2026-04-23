@@ -904,7 +904,7 @@ def render_overview(filtered, ct):
     c4.metric("High Risk", high)
     c5.metric("Avg Impact", f"{avg}/10")
 
-        # --- Compact Client Insights (clickable) ---
+           # --- Compact Client Insights (clickable) ---
     st.subheader("Client Insights")
 
     if filtered.empty:
@@ -912,12 +912,23 @@ def render_overview(filtered, ct):
     else:
         ins = client_insights(filtered, ct)
 
+        st.info(ins.get("headline", ""))
+
+        c_focus, c_next = st.columns(2)
+        with c_focus:
+            st.caption("Focus")
+            st.write(ins.get("focus", ""))
+        with c_next:
+            st.caption("Next")
+            st.write(ins.get("next_step", ""))
+
+        st.markdown("**Top relevant items**")
+
         top3 = filtered.sort_values(
             ["impact_score", "confidence_score"],
             ascending=False
         ).head(3)
 
-        rows_html = ""
         for _, r in top3.iterrows():
             title = r.get("title", "Untitled")
             why = r.get("why_this_matters", "")
@@ -925,52 +936,28 @@ def render_overview(filtered, ct):
             source = r.get("source", "")
             risk = str(r.get("risk_level", "")).lower()
 
-            risk_badge = ""
+            risk_label = ""
             if risk == "high":
-                risk_badge = '<span style="background:#fee2e2;color:#991b1b;padding:2px 6px;border-radius:6px;font-size:0.7rem;margin-left:6px;">HIGH</span>'
+                risk_label = "HIGH"
             elif risk == "medium":
-                risk_badge = '<span style="background:#fef3c7;color:#92400e;padding:2px 6px;border-radius:6px;font-size:0.7rem;margin-left:6px;">MED</span>'
+                risk_label = "MED"
 
-            link_html = f'<a href="{url}" target="_blank" style="text-decoration:none;color:#1d4ed8;">{title} ↗</a>' if url else title
+            box1, box2 = st.columns([6, 1])
 
-            rows_html += f"""
-            <div style="padding:0.55rem 0;border-bottom:1px dashed #e5e7eb;">
-                <div style="font-weight:600;font-size:0.88rem;color:#0f172a;">
-                    {link_html}{risk_badge}
-                </div>
-                <div style="font-size:0.80rem;color:#475569;line-height:1.45;">
-                    {why}
-                </div>
-                <div style="font-size:0.72rem;color:#94a3b8;margin-top:2px;">
-                    {source}
-                </div>
-            </div>
-            """
+            with box1:
+                if url and str(url).strip():
+                    st.markdown(f"**[{title} ↗]({url})**")
+                else:
+                    st.markdown(f"**{title}**")
 
-        trend_icon = {"up": "📈", "down": "📉", "stable": "➡️"}.get(ins.get("trend"), "➡️")
+                st.write(why)
+                st.caption(source)
 
-        insight_html = f"""
-        <div style="
-            background:linear-gradient(135deg,#f8fafc 0%,#eef2ff 100%);
-            border:1px solid #e2e8f0;
-            border-radius:14px;
-            padding:0.9rem 1rem;
-            margin-bottom:0.8rem;
-        ">
-            <div style="font-weight:700;font-size:0.9rem;color:#1e293b;margin-bottom:0.35rem;">
-                {trend_icon} {ins.get("headline", "")}
-            </div>
+            with box2:
+                if risk_label:
+                    st.metric("Risk", risk_label)
 
-            <div style="font-size:0.78rem;color:#475569;margin-bottom:0.5rem;">
-                <b>Focus:</b> {ins.get("focus", "")} &nbsp;•&nbsp;
-                <b>Next:</b> {ins.get("next_step", "")}
-            </div>
-
-            {rows_html}
-        </div>
-        """
-
-        st.markdown(insight_html, unsafe_allow_html=True)
+            st.divider()
 
     render_urgent(filtered)
     render_timeline(filtered)
