@@ -934,7 +934,7 @@ def render_overview(filtered, ct):
             fig = px.bar(fr["pri"], x="priority", y="count", color="priority",
                          color_discrete_map=PRIORITY_COLORS)
             fig.update_layout(margin=dict(t=10, b=10), height=280, showlegend=False)
-            c2.plotly_chart(fig, use_container_width=True)
+            c2.plotly_chart(fig, width="stretch")
 
 
 # ================================================================
