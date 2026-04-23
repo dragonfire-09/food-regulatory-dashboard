@@ -2023,7 +2023,7 @@ def render_comparison(filtered, ct):
             "Previous": v2,
             "Change": f"{direction} {d:+.1f}" if isinstance(d, float) else f"{direction} {d:+d}",
         })
-    st.dataframe(pd.DataFrame(rows), width=0, hide_index=True)
+    st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
 
     # ============================================================
     # TREND CHART - Daily Volume
