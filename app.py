@@ -272,9 +272,26 @@ def save_json_records(path: Path, records):
 def refresh_live_data():
     efsa = fetch_efsa_updates()
     rasff = fetch_rasff_updates()
-    items = efsa + rasff
-    save_json_records(LIVE_DATA_FILE, items)
-    return items
+    new_items = efsa + rasff
+
+    # Mevcut verileri oku ve biriktir
+    existing = load_json_records(LIVE_DATA_FILE)
+    combined = new_items + existing
+
+    # Tekrarları kaldır
+    seen = set()
+    unique = []
+    for item in combined:
+        key = f"{item.get('title', '')}-{item.get('source', '')}-{item.get('date', '')}"
+        if key not in seen:
+            seen.add(key)
+            unique.append(item)
+
+    # Son 500 kaydı tut
+    unique = unique[:500]
+
+    save_json_records(LIVE_DATA_FILE, unique)
+    return new_items
     
 def ensure_metadata_fields(df):
     defaults = {
