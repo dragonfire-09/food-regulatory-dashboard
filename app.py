@@ -69,14 +69,24 @@ def add_task(task):
     save_tasks(tasks)
 
 def add_to_watchlist(item):
-    watchlist = load_watchlist()
+    work_items = load_work_items()
 
-    existing_ids = {str(x.get("id", "")) for x in watchlist}
-    if str(item.get("id", "")) in existing_ids:
+    item_id = str(item.get("id", ""))
+
+    exists = any(
+        str(x.get("id", "")) == item_id and str(x.get("type", "")) == "watchlist"
+        for x in work_items
+    )
+
+    if exists:
         return False
 
-    watchlist.append(item)
-    save_watchlist(watchlist)
+    item["type"] = "watchlist"
+    item["status"] = "open"
+
+    work_items.append(item)
+    save_work_items(work_items)
+
     return True
 
 # ================================================================
