@@ -1697,7 +1697,8 @@ with st.sidebar:
     "View",
     ["Overview", "Updates", "Analytics", "Reports", "Watchlist", "Worklist", "Comparison"]
 )
-    st.divider()
+
+st.divider()
 
     if st.button("Refresh Live Data", width="stretch"):
         with st.spinner("Fetching from EFSA & RASFF..."):
