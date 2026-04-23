@@ -1087,6 +1087,7 @@ with c_next:
                 st.success("Task created and saved")
             else:
                 st.warning("No item available to create a task from.")
+                
         with c_next:
             st.caption("Next")
     next_step = ins.get("next_step", "")
