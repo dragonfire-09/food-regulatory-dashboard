@@ -918,10 +918,9 @@ def render_overview(filtered, ct):
         with c_focus:
             st.caption("Focus")
             st.write(ins.get("focus", ""))
-       with c_next:
+        with c_next:
     st.caption("Next")
-
-    next_step = ins.get("next_step", "")
+   next_step = ins.get("next_step", "")
     st.write(next_step)
 
     b1, b2 = st.columns(2)
