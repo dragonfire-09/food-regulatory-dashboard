@@ -1051,7 +1051,7 @@ def render_overview(filtered, ct):
             ascending=False
         ).iloc[0]
 
-        c_focus, c_next = st.columns(2)
+c_focus, c_next = st.columns(2)
 
 with c_focus:
     st.caption("Focus")
