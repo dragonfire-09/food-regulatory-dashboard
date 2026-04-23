@@ -914,8 +914,6 @@ def render_overview(filtered, ct):
 
         st.info(ins.get("headline", ""))
 
-       c_focus, c_next = st.columns(2)
-
     c_focus, c_next = st.columns(2)
 
     with c_focus:
