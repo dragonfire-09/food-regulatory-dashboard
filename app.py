@@ -938,12 +938,13 @@ def render_overview(filtered, ct):
 
     st.markdown("**Top relevant items**")
 
-    top3 = filtered.sort_values(
-            ["impact_score", "confidence_score"],
-            ascending=False
-        ).head(3)
+top3 = filtered.sort_values(
+    ["impact_score", "confidence_score"],
+    ascending=False
+).head(3)
 
-        for _, r in top3.iterrows():
+for _, r in top3.iterrows():
+    
             title = r.get("title", "Untitled")
             why = r.get("why_this_matters", "")
             url = r.get("url", "")
