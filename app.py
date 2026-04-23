@@ -271,9 +271,11 @@ def save_json_records(path: Path, records):
 
 def refresh_live_data():
     import requests
+    import sys
 
     # RASFF API test
-    print("[DEBUG] Testing RASFF API...")
+    sys.stderr.write("[DEBUG] Testing RASFF API...\n")
+    sys.stderr.flush()
     try:
         test_url = (
             "https://webgate.ec.europa.eu/rasff-window/backend"
@@ -289,21 +291,24 @@ def refresh_live_data():
             },
             timeout=25,
         )
-        print(f"[DEBUG] RASFF status: {test_resp.status_code}")
-        print(f"[DEBUG] RASFF response: {test_resp.text[:500]}")
+        sys.stderr.write(f"[DEBUG] RASFF status: {test_resp.status_code}\n")
+        sys.stderr.write(f"[DEBUG] RASFF body: {test_resp.text[:300]}\n")
+        sys.stderr.flush()
     except Exception as e:
-        print(f"[DEBUG] RASFF error: {e}")
+        sys.stderr.write(f"[DEBUG] RASFF error: {e}\n")
+        sys.stderr.flush()
 
     # EFSA test
-    print("[DEBUG] Testing EFSA RSS...")
+    sys.stderr.write("[DEBUG] Testing EFSA RSS...\n")
+    sys.stderr.flush()
     try:
         import feedparser
         feed = feedparser.parse("https://www.efsa.europa.eu/en/press/rss")
-        print(f"[DEBUG] EFSA entries: {len(feed.entries)}")
-        if feed.entries:
-            print(f"[DEBUG] EFSA first title: {feed.entries[0].get('title', 'no title')}")
+        sys.stderr.write(f"[DEBUG] EFSA entries: {len(feed.entries)}\n")
+        sys.stderr.flush()
     except Exception as e:
-        print(f"[DEBUG] EFSA error: {e}")
+        sys.stderr.write(f"[DEBUG] EFSA error: {e}\n")
+        sys.stderr.flush()
 
     # Normal fetch
     efsa = fetch_efsa_updates()
@@ -312,13 +317,13 @@ def refresh_live_data():
 
     live_count = sum(1 for i in items if i.get("source_status") == "live")
     fallback_count = sum(1 for i in items if i.get("source_status") == "fallback")
-    print(f"[REFRESH] Total: {len(items)} | Live: {live_count} | Fallback: {fallback_count}")
-    print(f"[REFRESH] EFSA: {len(efsa)} items | RASFF: {len(rasff)} items")
+    sys.stderr.write(f"[REFRESH] Total: {len(items)} | Live: {live_count} | Fallback: {fallback_count}\n")
+    sys.stderr.write(f"[REFRESH] EFSA: {len(efsa)} | RASFF: {len(rasff)}\n")
+    sys.stderr.flush()
 
     save_json_records(LIVE_DATA_FILE, items)
     return items
-
-
+    
 def ensure_metadata_fields(df):
     defaults = {
         "source_status": "unknown",
