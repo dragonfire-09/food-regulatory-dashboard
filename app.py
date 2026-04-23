@@ -1694,7 +1694,7 @@ with st.sidebar:
     )
 
     view_mode = st.radio("View",
-                         ["Overview", "Updates", "Analytics", "Reports", "Watchlist", "Comparison"])
+                         ["Overview", "Updates", "Analytics", "Reports", "Worklist", "Comparison"]
 
     st.divider()
 
