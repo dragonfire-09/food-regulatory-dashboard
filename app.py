@@ -916,27 +916,29 @@ def render_overview(filtered, ct):
 
        c_focus, c_next = st.columns(2)
 
-with c_focus:
-    st.caption("Focus")
-    st.write(ins.get("focus", ""))
+    c_focus, c_next = st.columns(2)
 
-with c_next:
-    st.caption("Next")
+    with c_focus:
+        st.caption("Focus")
+        st.write(ins.get("focus", ""))
 
-    next_step = ins.get("next_step", "")
-    st.write(next_step)
+    with c_next:
+        st.caption("Next")
 
-    b1, b2 = st.columns(2)
+        next_step = ins.get("next_step", "")
+        st.write(next_step)
 
-    with b1:
-        if st.button("Create Task", key="task_btn"):
-            st.success("Task created")
+        b1, b2 = st.columns(2)
 
-    with b2:
-        if st.button("Watchlist", key="watch_btn"):
-            st.success("Added to watchlist")
+        with b1:
+            if st.button("Create Task", key="task_btn"):
+                st.success("Task created")
 
-st.markdown("**Top relevant items**")
+        with b2:
+            if st.button("Watchlist", key="watch_btn"):
+                st.success("Added to watchlist")
+
+    st.markdown("**Top relevant items**")
 
         top3 = filtered.sort_values(
             ["impact_score", "confidence_score"],
