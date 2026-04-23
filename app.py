@@ -1129,50 +1129,7 @@ def render_overview(filtered, ct):
                 </div>
                 """,
                 unsafe_allow_html=True,
-            ) 
-     def render_overview(filtered, ct):
-         st.subheader("Overview")
-
-    # ============================================================
-    # EXECUTIVE SNAPSHOT
-    # ============================================================
-    total_updates = len(filtered)
-    immediate_count = int((filtered["priority"] == "Immediate").sum()) if not filtered.empty else 0
-    high_risk_count = int((filtered["risk_level"].astype(str).str.lower() == "high").sum()) if not filtered.empty else 0
-    avg_impact = round(filtered["impact_score"].mean(), 1) if not filtered.empty else 0
-
-    st.markdown(
-        f"""
-        <div style="
-            background:linear-gradient(135deg,#f8fafc 0%,#ffffff 100%);
-            border:1px solid #e2e8f0;
-            border-radius:16px;
-            padding:1rem;
-            margin-bottom:1rem;
-        ">
-            <div style="font-size:0.8rem;color:#64748b;font-weight:700;text-transform:uppercase;">
-                Executive Snapshot
-            </div>
-            <div style="font-size:1.1rem;font-weight:800;margin-top:0.3rem;">
-                {immediate_count} immediate • {high_risk_count} high risk
-            </div>
-            <div style="font-size:0.85rem;color:#475569;margin-top:0.2rem;">
-                {total_updates} updates • avg impact {avg_impact}/10 • 👁️ {analytics['visits']}
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    # ============================================================
-    # ABOUT
-    # ============================================================
-    with st.expander("About this dashboard", expanded=False):
-        c1, c2, c3 = st.columns(3)
-
-        c1.info("Tracks EFSA & RASFF signals")
-        c2.info("Transforms into business insights")
-        c3.info("Supports action & reporting workflows")
+            )
 
     # ============================================================
     # CLIENT INSIGHT
@@ -1181,77 +1138,117 @@ def render_overview(filtered, ct):
 
     if filtered.empty:
         st.info("No data available.")
-        return
+    else:
+        ins = client_insights(filtered, ct)
+        top_item_for_action = filtered.sort_values(
+            ["impact_score", "confidence_score"],
+            ascending=False
+        ).iloc[0]
 
-    ins = client_insights(filtered, ct)
+        st.markdown(
+            f"""
+            <div style="
+                background:linear-gradient(135deg,#f8fafc 0%,#eef2ff 100%);
+                border:1px solid #e2e8f0;
+                border-radius:16px;
+                padding:1rem 1.05rem;
+                margin-bottom:0.9rem;
+            ">
+                <div style="font-size:1rem;font-weight:800;color:#0f172a;margin-bottom:0.35rem;">
+                    {ins.get("headline", "")}
+                </div>
+                <div style="font-size:0.84rem;color:#475569;line-height:1.65;">
+                    <strong>Focus:</strong> {ins.get("focus", "")}<br>
+                    <strong>Next step:</strong> {ins.get("next_step", "")}
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
-    st.info(ins.get("headline", ""))
+        c_left, c_right = st.columns([3, 2])
 
-    top_item = filtered.sort_values(
-        ["impact_score", "confidence_score"],
-        ascending=False
-    ).iloc[0]
+        with c_left:
+            st.markdown("**Priority items**")
 
-    col1, col2 = st.columns(2)
+            top3 = filtered.sort_values(
+                ["impact_score", "confidence_score"],
+                ascending=False
+            ).head(3)
 
-    with col1:
-        st.caption("Focus")
-        st.write(ins.get("focus", ""))
+            for _, r in top3.iterrows():
+                title = r.get("title", "Untitled")
+                why = r.get("why_this_matters", "")
+                url = r.get("url", "")
+                source = r.get("source", "")
+                risk = str(r.get("risk_level", "")).lower()
 
-    with col2:
-        st.caption("Next Step")
-        next_step = ins.get("next_step", "")
-        st.write(next_step)
+                risk_badge = ""
+                if risk == "high":
+                    risk_badge = '<span style="background:#fee2e2;color:#991b1b;padding:2px 8px;border-radius:999px;font-size:0.68rem;font-weight:700;margin-left:6px;">HIGH</span>'
+                elif risk == "medium":
+                    risk_badge = '<span style="background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:999px;font-size:0.68rem;font-weight:700;margin-left:6px;">MED</span>'
 
-        if st.button("Create Task", key=f"task_btn_{ct}_overview"):
-            item = {
-                "id": str(top_item.get("id", "")),
-                "type": "task",
-                "status": "open",
-                "created_at": datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC"),
-                "client_type": ct,
-                "title": f"Review: {top_item.get('title', 'Untitled')}",
-                "source": top_item.get("source", ""),
-                "risk_level": top_item.get("risk_level", ""),
-                "priority": top_item.get("priority", ""),
-                "next_step": next_step,
-                "url": top_item.get("url", ""),
-            }
+                title_html = f'<a href="{url}" target="_blank" style="text-decoration:none;color:#0f172a;">{title} ↗</a>' if url and str(url).strip() else title
 
-            if add_work_item(item):
-                analytics["actions"] += 1
-                save_analytics(analytics)
-                st.success("Task created")
-            else:
-                st.info("Task already exists")
+                st.markdown(
+                    f"""
+                    <div style="
+                        border:1px solid #e2e8f0;
+                        border-radius:14px;
+                        padding:0.85rem 0.95rem;
+                        margin-bottom:0.6rem;
+                        background:#ffffff;
+                    ">
+                        <div style="font-size:0.92rem;font-weight:700;color:#0f172a;line-height:1.4;">
+                            {title_html}{risk_badge}
+                        </div>
+                        <div style="font-size:0.81rem;color:#475569;line-height:1.55;margin-top:0.35rem;">
+                            {why}
+                        </div>
+                        <div style="font-size:0.72rem;color:#94a3b8;margin-top:0.35rem;">
+                            {source}
+                        </div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+
+        with c_right:
+            st.markdown("**Action panel**")
+            next_step = ins.get("next_step", "")
+            st.write(next_step)
+
+            if st.button("Create Task", key=f"task_btn_{ct}_overview"):
+                item = {
+                    "id": str(top_item_for_action.get("id", "")),
+                    "type": "task",
+                    "status": "open",
+                    "created_at": datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC"),
+                    "client_type": ct,
+                    "title": f"Review: {top_item_for_action.get('title', 'Untitled')}",
+                    "source": top_item_for_action.get("source", ""),
+                    "risk_level": top_item_for_action.get("risk_level", ""),
+                    "priority": top_item_for_action.get("priority", ""),
+                    "next_step": next_step,
+                    "url": top_item_for_action.get("url", ""),
+                }
+
+                added = add_work_item(item)
+                if added:
+                    analytics["actions"] += 1
+                    save_analytics(analytics)
+                    st.success("Task created")
+                else:
+                    st.info("Task already exists")
+
+            st.markdown("---")
+            st.caption("Use Updates to add items to Watchlist. Use Worklist to manage actions.")
 
     # ============================================================
-    # TOP ITEMS
+    # ADVANCED INSIGHTS
     # ============================================================
-    st.markdown("### Top Relevant Items")
-
-    top3 = filtered.sort_values(
-        ["impact_score", "confidence_score"],
-        ascending=False
-    ).head(3)
-
-    for _, r in top3.iterrows():
-        title = r.get("title", "Untitled")
-        why = r.get("why_this_matters", "")
-        url = r.get("url", "")
-
-        if url:
-            st.markdown(f"**[{title}]({url})**")
-        else:
-            st.markdown(f"**{title}**")
-
-        st.write(why)
-        st.divider()
-
-    # ============================================================
-    # ADVANCED INSIGHT
-    # ============================================================
-    with st.expander("Advanced insights"):
+    with st.expander("Advanced insight view", expanded=False):
         render_urgent(filtered)
         render_timeline(filtered)
 
@@ -1272,13 +1269,46 @@ def render_overview(filtered, ct):
 
         with g1:
             if "topic" in fr:
-                fig = px.pie(fr["topic"], names="topic", values="count", hole=0.5)
-                st.plotly_chart(fig, use_container_width=True, key=f"topic_{ct}")
+                fig_topic = px.pie(
+                    fr["topic"],
+                    names="topic",
+                    values="count",
+                    hole=0.55
+                )
+                fig_topic.update_layout(
+                    margin=dict(t=10, b=10, l=10, r=10),
+                    height=300,
+                    legend_title_text=""
+                )
+                st.plotly_chart(
+                    fig_topic,
+                    use_container_width=True,
+                    key=f"overview_topic_{ct}"
+                )
 
         with g2:
             if "pri" in fr:
-                fig = px.bar(fr["pri"], x="priority", y="count", text="count")
-                st.plotly_chart(fig, use_container_width=True, key=f"pri_{ct}")
+                fig_pri = px.bar(
+                    fr["pri"],
+                    x="priority",
+                    y="count",
+                    color="priority",
+                    color_discrete_map=PRIORITY_COLORS,
+                    text="count"
+                )
+                fig_pri.update_layout(
+                    margin=dict(t=10, b=10, l=10, r=10),
+                    height=300,
+                    showlegend=False,
+                    xaxis_title="",
+                    yaxis_title=""
+                )
+                fig_pri.update_traces(textposition="outside")
+                st.plotly_chart(
+                    fig_pri,
+                    use_container_width=True,
+                    key=f"overview_priority_{ct}"
+                )
     else:
         st.info("No analytics available.")
 # ================================================================
