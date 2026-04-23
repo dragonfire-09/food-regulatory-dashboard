@@ -270,57 +270,9 @@ def save_json_records(path: Path, records):
 
 
 def refresh_live_data():
-    import requests
-    import sys
-
-    # RASFF API test
-    sys.stderr.write("[DEBUG] Testing RASFF API...\n")
-    sys.stderr.flush()
-    try:
-        test_url = (
-            "https://webgate.ec.europa.eu/rasff-window/backend"
-            "/shared/notifications/search/consolidated"
-        )
-        test_resp = requests.post(
-            test_url,
-            json={"pageNumber": 1, "itemsPerPage": 3},
-            headers={
-                "User-Agent": "Mozilla/5.0",
-                "Accept": "application/json",
-                "Content-Type": "application/json",
-            },
-            timeout=25,
-        )
-        sys.stderr.write(f"[DEBUG] RASFF status: {test_resp.status_code}\n")
-        sys.stderr.write(f"[DEBUG] RASFF body: {test_resp.text[:300]}\n")
-        sys.stderr.flush()
-    except Exception as e:
-        sys.stderr.write(f"[DEBUG] RASFF error: {e}\n")
-        sys.stderr.flush()
-
-    # EFSA test
-    sys.stderr.write("[DEBUG] Testing EFSA RSS...\n")
-    sys.stderr.flush()
-    try:
-        import feedparser
-        feed = feedparser.parse("https://www.efsa.europa.eu/en/press/rss")
-        sys.stderr.write(f"[DEBUG] EFSA entries: {len(feed.entries)}\n")
-        sys.stderr.flush()
-    except Exception as e:
-        sys.stderr.write(f"[DEBUG] EFSA error: {e}\n")
-        sys.stderr.flush()
-
-    # Normal fetch
     efsa = fetch_efsa_updates()
     rasff = fetch_rasff_updates()
     items = efsa + rasff
-
-    live_count = sum(1 for i in items if i.get("source_status") == "live")
-    fallback_count = sum(1 for i in items if i.get("source_status") == "fallback")
-    sys.stderr.write(f"[REFRESH] Total: {len(items)} | Live: {live_count} | Fallback: {fallback_count}\n")
-    sys.stderr.write(f"[REFRESH] EFSA: {len(efsa)} | RASFF: {len(rasff)}\n")
-    sys.stderr.flush()
-
     save_json_records(LIVE_DATA_FILE, items)
     return items
     
