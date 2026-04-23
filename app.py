@@ -1921,7 +1921,8 @@ def render_worklist():
 # VIEW: COMPARISON
 # ================================================================
 def render_comparison(filtered, ct):
-    st.subheader("Comparison View")
+    st.subheader("📊 Comparison & Trends")
+
     if filtered.empty or "date" not in filtered.columns:
         st.info("Not enough data.")
         return
@@ -1931,64 +1932,243 @@ def render_comparison(filtered, ct):
         st.info("No date data.")
         return
 
+    # ============================================================
+    # QUICK PERIOD SELECTOR
+    # ============================================================
+    period_mode = st.radio(
+        "Quick Compare",
+        ["Custom", "Week vs Week", "Month vs Month", "Quarter vs Quarter"],
+        horizontal=True,
+    )
+
+    now = pd.Timestamp.now()
     min_d = dates.min().date()
     max_d = dates.max().date()
     mid_d = min_d + (max_d - min_d) / 2
 
-    st.markdown("**Period Comparison**")
-    c1, c2 = st.columns(2)
-    with c1:
-        st.markdown("*Period 1*")
-        p1s = st.date_input("P1 Start", value=min_d, key="p1s")
-        p1e = st.date_input("P1 End", value=mid_d, key="p1e")
-    with c2:
-        st.markdown("*Period 2*")
-        p2s = st.date_input("P2 Start", value=mid_d + timedelta(days=1), key="p2s")
-        p2e = st.date_input("P2 End", value=max_d, key="p2e")
+    if period_mode == "Week vs Week":
+        p1s = (now - pd.Timedelta(days=7)).date()
+        p1e = now.date()
+        p2s = (now - pd.Timedelta(days=14)).date()
+        p2e = (now - pd.Timedelta(days=7)).date()
+    elif period_mode == "Month vs Month":
+        p1s = (now - pd.Timedelta(days=30)).date()
+        p1e = now.date()
+        p2s = (now - pd.Timedelta(days=60)).date()
+        p2e = (now - pd.Timedelta(days=30)).date()
+    elif period_mode == "Quarter vs Quarter":
+        p1s = (now - pd.Timedelta(days=90)).date()
+        p1e = now.date()
+        p2s = (now - pd.Timedelta(days=180)).date()
+        p2e = (now - pd.Timedelta(days=90)).date()
+    else:
+        c1, c2 = st.columns(2)
+        with c1:
+            st.markdown("*Period 1 (Current)*")
+            p1s = st.date_input("P1 Start", value=mid_d, key="p1s")
+            p1e = st.date_input("P1 End", value=max_d, key="p1e")
+        with c2:
+            st.markdown("*Period 2 (Previous)*")
+            p2s = st.date_input("P2 Start", value=min_d, key="p2s")
+            p2e = st.date_input("P2 End", value=mid_d, key="p2e")
 
     p1 = filtered[(filtered["date"].dt.date >= p1s) & (filtered["date"].dt.date <= p1e)]
     p2 = filtered[(filtered["date"].dt.date >= p2s) & (filtered["date"].dt.date <= p2e)]
 
+    # ============================================================
+    # COMPARISON METRICS
+    # ============================================================
+    st.markdown("### Key Metrics")
+
+    p1_count = len(p1)
+    p2_count = len(p2)
+    p1_high = int((p1["risk_level"].astype(str).str.lower() == "high").sum()) if not p1.empty else 0
+    p2_high = int((p2["risk_level"].astype(str).str.lower() == "high").sum()) if not p2.empty else 0
+    p1_imm = int((p1["priority"] == "Immediate").sum()) if not p1.empty else 0
+    p2_imm = int((p2["priority"] == "Immediate").sum()) if not p2.empty else 0
+    p1_avg = round(p1["impact_score"].mean(), 1) if not p1.empty else 0
+    p2_avg = round(p2["impact_score"].mean(), 1) if not p2.empty else 0
+
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Total Updates", p1_count, delta=f"{p1_count - p2_count:+d} vs prior", delta_color="inverse")
+    m2.metric("High Risk", p1_high, delta=f"{p1_high - p2_high:+d} vs prior", delta_color="inverse")
+    m3.metric("Immediate", p1_imm, delta=f"{p1_imm - p2_imm:+d} vs prior", delta_color="inverse")
+    m4.metric("Avg Impact", f"{p1_avg}/10", delta=f"{round(p1_avg - p2_avg, 1):+.1f}")
+
+    # ============================================================
+    # DETAILED TABLE
+    # ============================================================
     metrics = {
-        "Total": (len(p1), len(p2)),
-        "Immediate": (
-            int((p1["priority"] == "Immediate").sum()) if not p1.empty else 0,
-            int((p2["priority"] == "Immediate").sum()) if not p2.empty else 0,
-        ),
-        "Avg Impact": (
-            round(p1["impact_score"].mean(), 1) if not p1.empty else 0,
-            round(p2["impact_score"].mean(), 1) if not p2.empty else 0,
-        ),
-        "High Risk": (
-            int((p1["risk_level"].astype(str).str.lower() == "high").sum()) if not p1.empty else 0,
-            int((p2["risk_level"].astype(str).str.lower() == "high").sum()) if not p2.empty else 0,
-        ),
+        "Total": (p1_count, p2_count),
+        "Immediate": (p1_imm, p2_imm),
+        "Avg Impact": (p1_avg, p2_avg),
+        "High Risk": (p1_high, p2_high),
         "Avg Confidence": (
             round(p1["confidence_score"].mean(), 1) if not p1.empty else 0,
             round(p2["confidence_score"].mean(), 1) if not p2.empty else 0,
+        ),
+        "Sources": (
+            p1["source"].nunique() if not p1.empty else 0,
+            p2["source"].nunique() if not p2.empty else 0,
         ),
     }
 
     rows = []
     for name, (v1, v2) in metrics.items():
-        d = v2 - v1
-        rows.append({"Metric": name, "Period 1": v1, "Period 2": v2,
-                      "Change": f"+{d}" if d > 0 else str(d)})
-    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+        d = v1 - v2
+        direction = "📈" if d > 0 else "📉" if d < 0 else "→"
+        rows.append({
+            "Metric": name,
+            "Current": v1,
+            "Previous": v2,
+            "Change": f"{direction} {d:+.1f}" if isinstance(d, float) else f"{direction} {d:+d}",
+        })
+    st.dataframe(pd.DataFrame(rows), width=0, hide_index=True)
 
+    # ============================================================
+    # TREND CHART - Daily Volume
+    # ============================================================
+    st.markdown("### 📈 Trend Over Time")
+
+    if not filtered.empty:
+        sixty_days = now - pd.Timedelta(days=60)
+        recent = filtered[filtered["date"] >= sixty_days].copy()
+
+        if not recent.empty:
+            daily = recent.set_index("date").resample("D").size().reset_index(name="count")
+            daily.columns = ["date", "count"]
+
+            fig_trend = px.area(
+                daily,
+                x="date",
+                y="count",
+                labels={"date": "Date", "count": "Updates"},
+            )
+            fig_trend.update_layout(
+                margin=dict(t=10, b=20, l=20, r=20),
+                height=300,
+                showlegend=False,
+            )
+            fig_trend.update_traces(
+                fill="tozeroy",
+                line_color="#3b82f6",
+                fillcolor="rgba(59,130,246,0.1)",
+            )
+            st.plotly_chart(fig_trend, width="stretch")
+
+    # ============================================================
+    # RISK COMPARISON PIE CHARTS
+    # ============================================================
+    st.markdown("### Risk Distribution")
+
+    pie1, pie2 = st.columns(2)
+
+    with pie1:
+        st.markdown("**Current Period**")
+        if not p1.empty:
+            risk_cur = p1["risk_level"].astype(str).value_counts().reset_index()
+            risk_cur.columns = ["risk_level", "count"]
+            fig_cur = px.pie(
+                risk_cur,
+                names="risk_level",
+                values="count",
+                hole=0.5,
+                color="risk_level",
+                color_discrete_map={"High": "#dc2626", "Medium": "#f59e0b", "Low": "#16a34a"},
+            )
+            fig_cur.update_layout(margin=dict(t=10, b=10, l=10, r=10), height=250)
+            st.plotly_chart(fig_cur, width="stretch")
+        else:
+            st.info("No data")
+
+    with pie2:
+        st.markdown("**Previous Period**")
+        if not p2.empty:
+            risk_prev = p2["risk_level"].astype(str).value_counts().reset_index()
+            risk_prev.columns = ["risk_level", "count"]
+            fig_prev = px.pie(
+                risk_prev,
+                names="risk_level",
+                values="count",
+                hole=0.5,
+                color="risk_level",
+                color_discrete_map={"High": "#dc2626", "Medium": "#f59e0b", "Low": "#16a34a"},
+            )
+            fig_prev.update_layout(margin=dict(t=10, b=10, l=10, r=10), height=250)
+            st.plotly_chart(fig_prev, width="stretch")
+        else:
+            st.info("No data")
+
+    # ============================================================
+    # TOPIC COMPARISON
+    # ============================================================
     if not p1.empty and not p2.empty and "topic" in filtered.columns:
+        st.markdown("### Topic Comparison")
         t1 = p1["topic"].value_counts().reset_index()
-        t1.columns = ["topic", "Period 1"]
+        t1.columns = ["topic", "Current"]
         t2 = p2["topic"].value_counts().reset_index()
-        t2.columns = ["topic", "Period 2"]
+        t2.columns = ["topic", "Previous"]
         m = t1.merge(t2, on="topic", how="outer").fillna(0)
         fig = go.Figure()
-        fig.add_trace(go.Bar(name="Period 1", x=m["topic"], y=m["Period 1"], marker_color="#3b82f6"))
-        fig.add_trace(go.Bar(name="Period 2", x=m["topic"], y=m["Period 2"], marker_color="#f59e0b"))
-        fig.update_layout(barmode="group", title="Topics: P1 vs P2", margin=dict(t=40, b=20))
-        st.plotly_chart(fig, use_container_width=True)
+        fig.add_trace(go.Bar(name="Current", x=m["topic"], y=m["Current"], marker_color="#3b82f6"))
+        fig.add_trace(go.Bar(name="Previous", x=m["topic"], y=m["Previous"], marker_color="#94a3b8"))
+        fig.update_layout(barmode="group", margin=dict(t=10, b=20))
+        st.plotly_chart(fig, width="stretch")
 
-    st.markdown("**Client Type Comparison**")
+    # ============================================================
+    # SOURCE TREND
+    # ============================================================
+    if not filtered.empty and "source" in filtered.columns:
+        st.markdown("### Source Activity Over Time")
+        recent = filtered[filtered["date"] >= now - pd.Timedelta(days=60)].copy()
+        if not recent.empty:
+            src_weekly = recent.groupby([
+                recent["date"].dt.to_period("W").dt.start_time,
+                "source"
+            ]).size().reset_index(name="count")
+            src_weekly.columns = ["week", "source", "count"]
+
+            fig_src = px.line(
+                src_weekly,
+                x="week",
+                y="count",
+                color="source",
+            )
+            fig_src.update_layout(
+                margin=dict(t=10, b=20, l=20, r=20),
+                height=300,
+            )
+            st.plotly_chart(fig_src, width="stretch")
+
+    # ============================================================
+    # TOPIC TREND
+    # ============================================================
+    if not filtered.empty and "topic" in filtered.columns:
+        st.markdown("### Topic Trend (Weekly)")
+        recent = filtered[filtered["date"] >= now - pd.Timedelta(days=60)].copy()
+        if not recent.empty:
+            topic_weekly = recent.groupby([
+                recent["date"].dt.to_period("W").dt.start_time,
+                "topic"
+            ]).size().reset_index(name="count")
+            topic_weekly.columns = ["week", "topic", "count"]
+
+            fig_topic = px.area(
+                topic_weekly,
+                x="week",
+                y="count",
+                color="topic",
+            )
+            fig_topic.update_layout(
+                margin=dict(t=10, b=20, l=20, r=20),
+                height=300,
+            )
+            st.plotly_chart(fig_topic, width="stretch")
+
+    # ============================================================
+    # CLIENT TYPE COMPARISON
+    # ============================================================
+    st.markdown("### Client Type Comparison")
     sel = st.multiselect("Compare types", CLIENT_TYPES, default=[ct])
     if sel and not filtered.empty:
         cr = []
@@ -2004,13 +2184,15 @@ def render_comparison(filtered, ct):
                 "Monitor": int((tmp["_p"] == "Monitor").sum()),
             })
         cdf = pd.DataFrame(cr)
-        st.dataframe(cdf, use_container_width=True, hide_index=True)
+        st.dataframe(cdf, width=0, hide_index=True)
         mel = cdf.melt(id_vars="Client", value_vars=["Immediate", "Review", "Monitor"])
-        fig = px.bar(mel, x="Client", y="value", color="variable",
-                     barmode="group", title="Priority by Client",
-                     color_discrete_map=PRIORITY_COLORS)
-        fig.update_layout(margin=dict(t=40, b=20))
-        st.plotly_chart(fig, use_container_width=True)
+        fig = px.bar(
+            mel, x="Client", y="value", color="variable",
+            barmode="group",
+            color_discrete_map=PRIORITY_COLORS,
+        )
+        fig.update_layout(margin=dict(t=10, b=20))
+        st.plotly_chart(fig, width="stretch")
 
 
 # ================================================================
