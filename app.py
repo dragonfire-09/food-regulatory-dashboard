@@ -18,6 +18,20 @@ except Exception:
 
 from scrapers.efsa_rss_scraper import fetch_efsa_updates
 from scrapers.rasff_scraper import fetch_rasff_updates
+import json
+import os
+
+ANALYTICS_FILE = "data/analytics.json"
+
+def load_analytics():
+    if not os.path.exists(ANALYTICS_FILE):
+        return {"visits": 0, "actions": 0}
+    with open(ANALYTICS_FILE, "r") as f:
+        return json.load(f)
+
+def save_analytics(data):
+    with open(ANALYTICS_FILE, "w") as f:
+        json.dump(data, f)
 
 # ================================================================
 # PAGE CONFIG
