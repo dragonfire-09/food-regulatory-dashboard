@@ -1165,6 +1165,9 @@ def render_overview(filtered, ct):
     render_urgent(filtered)
     render_timeline(filtered)
 
+    # ============================================================
+    # Quick Analytics
+    # ============================================================
     st.subheader("Quick Analytics")
 
     if not filtered.empty:
@@ -1215,70 +1218,6 @@ def render_overview(filtered, ct):
                 )
                 fig_pri.update_traces(textposition="outside")
                 st.plotly_chart(fig_pri, use_container_width=True)
-    else:
-        st.info("No analytics available.")
-
-    # ============================================================
-    # Quick Analytics
-    # ============================================================
-    st.subheader("Quick Analytics")
-
-    if not filtered.empty:
-        fr = get_frames(filtered)
-
-        immediate_count = int((filtered["priority"] == "Immediate").sum()) if "priority" in filtered.columns else 0
-        high_risk_count = int((filtered["risk_level"].astype(str).str.lower() == "high").sum()) if "risk_level" in filtered.columns else 0
-        avg_impact = round(filtered["impact_score"].mean(), 1) if "impact_score" in filtered.columns else 0
-
-        k1, k2, k3 = st.columns(3)
-        k1.metric("Immediate", immediate_count)
-        k2.metric("High Risk", high_risk_count)
-        k3.metric("Avg Impact", f"{avg_impact}/10")
-
-        g1, g2 = st.columns(2)
-
-        with g1:
-            if "topic" in fr:
-                fig_topic = px.pie(
-                    fr["topic"],
-                    names="topic",
-                    values="count",
-                    hole=0.5
-                )
-                fig_topic.update_layout(
-                    margin=dict(t=10, b=10, l=10, r=10),
-                    height=300,
-                    legend_title_text=""
-                )
-                st.plotly_chart(
-                    fig_topic,
-                    use_container_width=True,
-                    key=f"overview_topic_{ct}"
-                )
-
-        with g2:
-            if "pri" in fr:
-                fig_pri = px.bar(
-                    fr["pri"],
-                    x="priority",
-                    y="count",
-                    color="priority",
-                    color_discrete_map=PRIORITY_COLORS,
-                    text="count"
-                )
-                fig_pri.update_layout(
-                    margin=dict(t=10, b=10, l=10, r=10),
-                    height=300,
-                    showlegend=False,
-                    xaxis_title="",
-                    yaxis_title=""
-                )
-                fig_pri.update_traces(textposition="outside")
-                st.plotly_chart(
-                    fig_pri,
-                    use_container_width=True,
-                    key=f"overview_priority_{ct}"
-                )
     else:
         st.info("No analytics available.")
 # ================================================================
