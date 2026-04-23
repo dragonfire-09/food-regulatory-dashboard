@@ -1,46 +1,89 @@
 import feedparser
 import requests
 from datetime import datetime
-from bs4 import BeautifulSoup
 import sys
 import re
 import json
 
-# Birden fazla canlı kaynak
+# ================================================================
+# SOURCES
+# ================================================================
+
 SOURCES = [
+    # RASFF API (şu an kapalı ama gelecekte açılabilir)
     {
         "name": "RASFF Portal API v2",
         "type": "api",
         "url": "https://webgate.ec.europa.eu/rasff-window/backend/public/notification/search/consolidated",
         "method": "POST",
         "payload": {"pageNumber": 1, "itemsPerPage": 10},
+        "source_label": "RASFF",
+        "jurisdiction": "EU",
     },
+    # Aktif RSS kaynakları
     {
-        "name": "RASFF Portal API v3",
-        "type": "api",
-        "url": "https://webgate.ec.europa.eu/rasff-window/backend/public/notifications/search",
-        "method": "POST",
-        "payload": {"pageNumber": 1, "itemsPerPage": 10},
-    },
-    {
-        "name": "EU Food Fraud Network",
-        "type": "rss",
-        "url": "https://ec.europa.eu/food/safety/rasff-food-and-feed-safety-alerts_en",
-    },
-    {
-        "name": "WHO Food Safety News",
+        "name": "WHO Food Safety",
         "type": "rss",
         "url": "https://www.who.int/rss-feeds/news-english.xml",
+        "source_label": "WHO",
+        "jurisdiction": "International",
     },
     {
         "name": "FSA UK Alerts",
         "type": "rss",
         "url": "https://www.food.gov.uk/rss-feed/alerts",
+        "source_label": "FSA UK",
+        "jurisdiction": "UK",
     },
     {
-        "name": "FDA Recalls RSS",
+        "name": "FDA Recalls",
         "type": "rss",
         "url": "https://www.fda.gov/about-fda/contact-fda/stay-informed/rss-feeds/recalls/rss.xml",
+        "source_label": "FDA",
+        "jurisdiction": "USA",
+    },
+    # Yeni kaynaklar
+    {
+        "name": "EFSA Scientific Opinions",
+        "type": "rss",
+        "url": "https://www.efsa.europa.eu/en/rss/scientific-outputs",
+        "source_label": "EFSA Science",
+        "jurisdiction": "EU",
+    },
+    {
+        "name": "CFIA Canada Recalls",
+        "type": "rss",
+        "url": "https://recalls-rappels.canada.ca/en/feed/cfia-food-recall-warnings-702",
+        "source_label": "CFIA",
+        "jurisdiction": "Canada",
+    },
+    {
+        "name": "EU Official Journal",
+        "type": "rss",
+        "url": "https://eur-lex.europa.eu/rss/document/OJ-L.xml",
+        "source_label": "EU Law",
+        "jurisdiction": "EU",
+    },
+    {
+        "name": "Codex Alimentarius",
+        "type": "rss",
+        "url": "https://www.fao.org/fao-who-codexalimentarius/rss/en/",
+        "source_label": "Codex",
+        "jurisdiction": "International",
+    },
+    {
+        "name": "BfR Germany",
+        "type": "rss",
+        "url": "https://www.bfr.bund.de/en/rss/press_information.xml",
+        "source_label": "BfR",
+        "jurisdiction": "Germany",
+    },
+    {
+        "name": "ANSES France",
+        "type": "rss",
+        "url": "https://www.anses.fr/en/rss.xml",
+        "source_label": "ANSES",
+        "jurisdiction": "France",
     },
 ]
 
@@ -49,6 +92,10 @@ HEADERS = {
     "Accept": "application/json,text/html,application/xml,*/*",
 }
 
+
+# ================================================================
+# HELPER FUNCTIONS
+# ================================================================
 
 def detect_topic(text):
     t = text.lower()
@@ -60,8 +107,10 @@ def detect_topic(text):
         return "Fraud"
     if "novel" in t:
         return "Novel Foods"
-    if any(w in t for w in ["pesticide", "residue", "contaminant", "chemical",
-                             "salmonella", "listeria", "aflatoxin", "mercury"]):
+    if any(w in t for w in [
+        "pesticide", "residue", "contaminant", "chemical",
+        "salmonella", "listeria", "aflatoxin", "mercury"
+    ]):
         return "Contaminants"
     return "Food Safety"
 
@@ -95,12 +144,16 @@ def safe_text(entry, field):
     return val.replace("\n", " ").strip()[:2000]
 
 
+# ================================================================
+# FALLBACK
+# ================================================================
+
 def fallback_rasff_examples():
     now_str = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
     return [
         {
             "id": "rasff-fallback-1",
-            "title": "RASFF/Food Safety fallback: Live sources unavailable",
+            "title": "Food Safety fallback: Live sources unavailable",
             "source": "RASFF",
             "date": datetime.utcnow().strftime("%Y-%m-%d"),
             "jurisdiction": "EU",
@@ -108,7 +161,7 @@ def fallback_rasff_examples():
             "risk_level": "High",
             "ai_summary": "Live food safety data could not be fetched.",
             "business_impact": "This is a fallback record.",
-            "recommended_action": "Check RASFF portal manually.",
+            "recommended_action": "Check sources manually.",
             "raw_text": "Fallback record.",
             "url": "https://webgate.ec.europa.eu/rasff-window/screen/list",
             "notification_reference": "n/a",
@@ -119,8 +172,12 @@ def fallback_rasff_examples():
     ]
 
 
+# ================================================================
+# API SOURCE
+# ================================================================
+
 def try_api_source(source, session):
-    sys.stderr.write(f"[RASFF] Trying API: {source['name']}\n")
+    sys.stderr.write(f"[SOURCE] Trying API: {source['name']}\n")
     sys.stderr.flush()
 
     try:
@@ -134,7 +191,7 @@ def try_api_source(source, session):
         else:
             resp = session.get(source["url"], timeout=20)
 
-        sys.stderr.write(f"[RASFF] {source['name']} status: {resp.status_code}\n")
+        sys.stderr.write(f"[SOURCE] {source['name']} status: {resp.status_code}\n")
         sys.stderr.flush()
 
         if resp.status_code != 200:
@@ -150,8 +207,14 @@ def try_api_source(source, session):
                     notifications = data[key]
                     break
 
-        sys.stderr.write(f"[RASFF] {source['name']} items: {len(notifications)}\n")
+        sys.stderr.write(f"[SOURCE] {source['name']} items: {len(notifications)}\n")
         sys.stderr.flush()
+
+        if not notifications:
+            return []
+
+        source_label = source.get("source_label", "RASFF")
+        jurisdiction = source.get("jurisdiction", "EU")
 
         results = []
         for i, notif in enumerate(notifications[:10]):
@@ -164,17 +227,27 @@ def try_api_source(source, session):
             topic = detect_topic(combined)
             risk = detect_risk(combined)
 
+            if risk == "High":
+                impact = "May require immediate compliance escalation or product containment."
+                action = "Assess exposure and review supplier controls."
+            elif risk == "Medium":
+                impact = "May affect documentation, traceability, or labeling."
+                action = "Review internal records."
+            else:
+                impact = "Lower urgency but relevant for compliance review."
+                action = "Monitor developments."
+
             results.append({
                 "id": f"rasff-{ref}",
                 "title": subj,
-                "source": "RASFF",
+                "source": source_label,
                 "date": date_str,
-                "jurisdiction": "EU",
+                "jurisdiction": jurisdiction,
                 "topic": topic,
                 "risk_level": risk,
                 "ai_summary": subj,
-                "business_impact": f"{'Urgent' if risk == 'High' else 'Review'} - from {source['name']}",
-                "recommended_action": "Review and assess relevance.",
+                "business_impact": impact,
+                "recommended_action": action,
                 "raw_text": combined,
                 "url": f"https://webgate.ec.europa.eu/rasff-window/screen/notification/{ref}",
                 "notification_reference": ref,
@@ -186,43 +259,55 @@ def try_api_source(source, session):
         return results
 
     except Exception as e:
-        sys.stderr.write(f"[RASFF] {source['name']} error: {e}\n")
+        sys.stderr.write(f"[SOURCE] {source['name']} error: {e}\n")
         sys.stderr.flush()
         return []
 
 
+# ================================================================
+# RSS SOURCE
+# ================================================================
+
 def try_rss_source(source, limit=10):
-    sys.stderr.write(f"[RASFF] Trying RSS: {source['name']} -> {source['url']}\n")
+    sys.stderr.write(f"[SOURCE] Trying RSS: {source['name']} -> {source['url']}\n")
     sys.stderr.flush()
 
     try:
         feed = feedparser.parse(source["url"])
         count = len(feed.entries) if feed.entries else 0
-        sys.stderr.write(f"[RASFF] {source['name']}: {count} entries\n")
+        sys.stderr.write(f"[SOURCE] {source['name']}: {count} entries\n")
         sys.stderr.flush()
 
         if count == 0:
             return []
 
-        results = []
-        source_label = "RASFF"
-        if "FSA" in source["name"]:
-            source_label = "FSA UK"
-        elif "FDA" in source["name"]:
-            source_label = "FDA"
-        elif "WHO" in source["name"]:
-            source_label = "WHO"
+        source_label = source.get("source_label", "RASFF")
+        jurisdiction = source.get("jurisdiction", "EU")
 
+        results = []
         for i, entry in enumerate(feed.entries[:limit]):
             title = entry.get("title", "Untitled").strip()
             summary = safe_text(entry, "summary")
             link = entry.get("link", source["url"])
             combined = f"{title} {summary}"
 
-            # WHO feed'den sadece food safety ile ilgili olanları al
-            if "WHO" in source["name"]:
-                food_keywords = ["food", "safety", "contamination", "outbreak",
-                                 "salmonella", "listeria", "recall", "nutrition"]
+            # WHO - sadece food safety
+            if source_label == "WHO":
+                food_keywords = [
+                    "food", "safety", "contamination", "outbreak",
+                    "salmonella", "listeria", "recall", "nutrition",
+                    "foodborne", "hygiene"
+                ]
+                if not any(kw in combined.lower() for kw in food_keywords):
+                    continue
+
+            # EU Official Journal - sadece food
+            if source_label == "EU Law":
+                food_keywords = [
+                    "food", "regulation", "commission", "health",
+                    "contaminant", "additive", "novel", "feed",
+                    "pesticide", "residue", "hygiene", "labelling"
+                ]
                 if not any(kw in combined.lower() for kw in food_keywords):
                     continue
 
@@ -232,17 +317,27 @@ def try_rss_source(source, limit=10):
             pp = entry.get("published_parsed") or entry.get("updated_parsed")
             date_str = normalize_date(pp) if pp else datetime.utcnow().strftime("%Y-%m-%d")
 
+            if risk == "High":
+                impact = "May require immediate compliance escalation or product containment."
+                action = "Assess exposure and review supplier controls."
+            elif risk == "Medium":
+                impact = "May affect documentation, traceability, or labeling."
+                action = "Review internal records."
+            else:
+                impact = "Lower urgency but relevant for compliance review."
+                action = "Monitor developments."
+
             results.append({
-                "id": f"rasff-{source_label.lower()}-{i}-{date_str}",
+                "id": f"{source_label.lower()}-{i}-{date_str}",
                 "title": title,
                 "source": source_label,
                 "date": date_str,
-                "jurisdiction": "EU" if source_label in ["RASFF", "FSA UK"] else "International",
+                "jurisdiction": jurisdiction,
                 "topic": topic,
                 "risk_level": risk,
                 "ai_summary": summary if summary else title,
-                "business_impact": f"Signal from {source_label} - review for relevance.",
-                "recommended_action": "Evaluate and determine if action needed.",
+                "business_impact": impact,
+                "recommended_action": action,
                 "raw_text": combined,
                 "url": link,
                 "notification_reference": f"{source_label}-{i}",
@@ -254,10 +349,14 @@ def try_rss_source(source, limit=10):
         return results
 
     except Exception as e:
-        sys.stderr.write(f"[RASFF] {source['name']} error: {e}\n")
+        sys.stderr.write(f"[SOURCE] {source['name']} error: {e}\n")
         sys.stderr.flush()
         return []
 
+
+# ================================================================
+# MAIN FETCH FUNCTION
+# ================================================================
 
 def fetch_rasff_updates(limit=10):
     session = requests.Session()
@@ -273,16 +372,15 @@ def fetch_rasff_updates(limit=10):
 
         if items:
             all_results.extend(items)
-            sys.stderr.write(f"[RASFF] Got {len(items)} from {source['name']}\n")
+            sys.stderr.write(f"[SOURCE] Got {len(items)} from {source['name']}\n")
             sys.stderr.flush()
 
     if all_results:
-        # En fazla limit kadar döndür
         all_results = all_results[:limit]
-        sys.stderr.write(f"[RASFF] TOTAL SUCCESS: {len(all_results)} live items\n")
+        sys.stderr.write(f"[SOURCE] TOTAL SUCCESS: {len(all_results)} live items\n")
         sys.stderr.flush()
         return all_results
 
-    sys.stderr.write("[RASFF] All sources failed, using fallback\n")
+    sys.stderr.write("[SOURCE] All sources failed, using fallback\n")
     sys.stderr.flush()
     return fallback_rasff_examples()
