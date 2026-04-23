@@ -2107,10 +2107,14 @@ with st.sidebar:
 # MAIN AREA
 # ================================================================
 # Hero stats
+# Hero stats
 h_total = len(df)
 h_imm = 0
 h_avg = 0
 h_live = 0
+
+# Trend metrics
+trend = compute_trend_metrics(df)
 
 if not df.empty:
     t_imp = df.apply(lambda r: calc_impact(r, client_type), axis=1)
