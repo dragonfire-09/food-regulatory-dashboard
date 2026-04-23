@@ -1506,6 +1506,12 @@ def render_comparison(filtered, ct):
 # APP INITIALIZATION
 # ================================================================
 ensure_data_dir()
+analytics = load_analytics()
+
+if "visited" not in st.session_state:
+    analytics["visits"] += 1
+    st.session_state["visited"] = True
+    save_analytics(analytics)
 
 auto_triggered = False
 auto_msg = None
