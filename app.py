@@ -69,6 +69,39 @@ def add_task(task):
     tasks.append(task)
     save_tasks(tasks)
 
+def load_work_items():
+    return load_json_file(WORK_ITEMS_FILE, [])
+
+def save_work_items(items):
+    save_json_file(WORK_ITEMS_FILE, items)
+
+def add_work_item(item):
+    items = load_work_items()
+    item_id = str(item.get("id", ""))
+    item_type = str(item.get("type", ""))
+
+    exists = any(
+        str(x.get("id", "")) == item_id and str(x.get("type", "")) == item_type
+        for x in items
+    )
+    if exists:
+        return False
+
+    items.append(item)
+    save_work_items(items)
+    return True
+
+def remove_work_item(item_id, item_type):
+    items = load_work_items()
+    items = [
+        x for x in items
+        if not (
+            str(x.get("id", "")) == str(item_id) and
+            str(x.get("type", "")) == str(item_type)
+        )
+    ]
+    save_work_items(items)
+
 def add_to_watchlist(item):
     work_items = load_work_items()
 
