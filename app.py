@@ -1044,7 +1044,7 @@ def render_overview(filtered, ct):
         ins = client_insights(filtered, ct)
 
         st.info(ins.get("headline", ""))
-            top_item_for_action = None
+        top_item_for_action = None
     if not filtered.empty:
         top_item_for_action = filtered.sort_values(
             ["impact_score", "confidence_score"],
