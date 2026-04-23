@@ -904,7 +904,7 @@ def render_overview(filtered, ct):
     c4.metric("High Risk", high)
     c5.metric("Avg Impact", f"{avg}/10")
 
-    # --- Compact Client Insights (clickable) ---
+        # --- Compact Client Insights (clickable) ---
     st.subheader("Client Insights")
 
     if filtered.empty:
@@ -949,29 +949,28 @@ def render_overview(filtered, ct):
 
         trend_icon = {"up": "📈", "down": "📉", "stable": "➡️"}.get(ins.get("trend"), "➡️")
 
-        st.markdown(
-            f"""
-            <div style="
-                background:linear-gradient(135deg,#f8fafc 0%,#eef2ff 100%);
-                border:1px solid #e2e8f0;
-                border-radius:14px;
-                padding:0.9rem 1rem;
-                margin-bottom:0.8rem;
-            ">
-                <div style="font-weight:700;font-size:0.9rem;color:#1e293b;margin-bottom:0.35rem;">
-                    {trend_icon} {ins.get("headline","")}
-                </div>
-
-                <div style="font-size:0.78rem;color:#475569;margin-bottom:0.5rem;">
-                    <b>Focus:</b> {ins.get("focus","")} &nbsp;•&nbsp;
-                    <b>Next:</b> {ins.get("next_step","")}
-                </div>
-
-                {rows_html}
+        insight_html = f"""
+        <div style="
+            background:linear-gradient(135deg,#f8fafc 0%,#eef2ff 100%);
+            border:1px solid #e2e8f0;
+            border-radius:14px;
+            padding:0.9rem 1rem;
+            margin-bottom:0.8rem;
+        ">
+            <div style="font-weight:700;font-size:0.9rem;color:#1e293b;margin-bottom:0.35rem;">
+                {trend_icon} {ins.get("headline", "")}
             </div>
-            """,
-            unsafe_allow_html=True
-        )
+
+            <div style="font-size:0.78rem;color:#475569;margin-bottom:0.5rem;">
+                <b>Focus:</b> {ins.get("focus", "")} &nbsp;•&nbsp;
+                <b>Next:</b> {ins.get("next_step", "")}
+            </div>
+
+            {rows_html}
+        </div>
+        """
+
+        st.markdown(insight_html, unsafe_allow_html=True)
 
     render_urgent(filtered)
     render_timeline(filtered)
