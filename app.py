@@ -1063,7 +1063,7 @@ def render_overview(filtered, ct):
         next_step = ins.get("next_step", "")
         st.write(next_step)
 
-              b1, b2 = st.columns(2)
+        b1, b2 = st.columns(2)
 
         with b1:
             if st.button("Create Task", key="task_btn"):
