@@ -1082,32 +1082,31 @@ def render_overview(filtered, ct):
            # --- Compact Client Insights (clickable) ---
         st.subheader("Client Insights")
 
-    if filtered.empty:
-        st.info("No data available.")
-    else:
-        ins = client_insights(filtered, ct)
-        st.info(ins.get("headline", ""))
+if filtered.empty:
+    st.info("No data available.")
+else:
+    ins = client_insights(filtered, ct)
 
-        top_item_for_action = filtered.sort_values(
-            ["impact_score", "confidence_score"],
-            ascending=False
-        ).iloc[0]
+    st.info(ins.get("headline", ""))
 
-c_focus, c_next = st.columns(2)
+    top_item_for_action = filtered.sort_values(
+        ["impact_score", "confidence_score"],
+        ascending=False
+    ).iloc[0]
 
-with c_focus:
-    st.caption("Focus")
-    st.write(ins.get("focus", ""))
+    c_focus, c_next = st.columns(2)
 
-with c_next:
-    st.caption("Next")
+    with c_focus:
+        st.caption("Focus")
+        st.write(ins.get("focus", ""))
 
-    next_step = ins.get("next_step", "")
-    st.write(next_step)
+    with c_next:
+        st.caption("Next")
 
-    if st.button("Create Task", key=f"task_btn_{ct}_overview"):
-        if top_item_for_action is not None:
+        next_step = ins.get("next_step", "")
+        st.write(next_step)
 
+        if st.button("Create Task", key=f"task_btn_{ct}_overview"):
             item = {
                 "id": str(top_item_for_action.get("id", "")),
                 "type": "task",
