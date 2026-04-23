@@ -1129,7 +1129,7 @@ def render_overview(filtered, ct):
                 </div>
                 """,
                 unsafe_allow_html=True,
-            )       
+            ) 
      def render_overview(filtered, ct):
          st.subheader("Overview")
 
