@@ -33,6 +33,52 @@ def save_analytics(data):
     with open(ANALYTICS_FILE, "w") as f:
         json.dump(data, f)
 
+TASKS_FILE = "data/tasks.json"
+WATCHLIST_FILE = "data/watchlist.json"
+
+def load_json_file(path, default):
+    if not os.path.exists("data"):
+        os.makedirs("data")
+
+    if not os.path.exists(path):
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(default, f, ensure_ascii=False, indent=2)
+
+    with open(path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+def save_json_file(path, data):
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+def load_tasks():
+    return load_json_file(TASKS_FILE, [])
+
+def save_tasks(tasks):
+    save_json_file(TASKS_FILE, tasks)
+
+def load_watchlist():
+    return load_json_file(WATCHLIST_FILE, [])
+
+def save_watchlist(items):
+    save_json_file(WATCHLIST_FILE, items)
+
+def add_task(task):
+    tasks = load_tasks()
+    tasks.append(task)
+    save_tasks(tasks)
+
+def add_to_watchlist(item):
+    watchlist = load_watchlist()
+
+    existing_ids = {str(x.get("id", "")) for x in watchlist}
+    if str(item.get("id", "")) in existing_ids:
+        return False
+
+    watchlist.append(item)
+    save_watchlist(watchlist)
+    return True
+
 # ================================================================
 # PAGE CONFIG
 # ================================================================
