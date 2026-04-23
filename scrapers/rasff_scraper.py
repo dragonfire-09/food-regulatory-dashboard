@@ -1,11 +1,15 @@
-import re
 import requests
 from datetime import datetime
-from bs4 import BeautifulSoup
 
-RASFF_API_URL = "https://webgate.ec.europa.eu/rasff-window/backend/shared/notifications"
-RASFF_DETAIL_BASE = "https://webgate.ec.europa.eu/rasff-window/screen/notification"
-HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; FoodRegDashboard/1.0)"}
+RASFF_API_URL = (
+    "https://webgate.ec.europa.eu/rasff-window/backend/shared/notifications/"
+    "search/consolidated"
+)
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (compatible; FoodRegDashboard/1.0)",
+    "Accept": "application/json",
+    "Content-Type": "application/json",
+}
 
 
 def detect_topic(text):
@@ -23,9 +27,16 @@ def detect_topic(text):
 
 def detect_risk(text):
     t = text.lower()
-    if any(w in t for w in ["salmonella", "listeria", "contamination", "undeclared allergen", "recall", "aflatoxin"]):
+    if any(w in t for w in [
+        "salmonella", "listeria", "contamination",
+        "undeclared allergen", "recall", "aflatoxin", "pathogen",
+        "e. coli", "hepatitis", "norovirus", "clostridium"
+    ]):
         return "High"
-    if any(w in t for w in ["traceability", "fraud", "origin", "residue", "pesticide"]):
+    if any(w in t for w in [
+        "traceability", "fraud", "origin", "residue",
+        "pesticide", "migration", "heavy metal", "mercury", "lead"
+    ]):
         return "Medium"
     return "Low"
 
@@ -41,7 +52,7 @@ def fallback_rasff_examples():
             "jurisdiction": "EU",
             "topic": "Contaminants",
             "risk_level": "High",
-            "ai_summary": "RASFF live data could not be fetched. Showing fallback.",
+            "ai_summary": "RASFF live data could not be fetched.",
             "business_impact": "This is a fallback record.",
             "recommended_action": "Check RASFF portal manually.",
             "raw_text": "Fallback RASFF record.",
@@ -54,45 +65,65 @@ def fallback_rasff_examples():
     ]
 
 
-def fetch_rasff_updates(limit=5):
-    """RASFF backend API'den canlı bildirim çeker."""
+def fetch_rasff_updates(limit=10):
+    """RASFF consolidated search API ile canlı bildirim çeker."""
     try:
-        params = {
-            "searcher": "notification",
-            "pageSize": str(limit),
-            "page": "1",
-            "notificationStatus": "OPEN",
-            "ordering": "notificationDate=DESC",
+        payload = {
+            "pageNumber": 1,
+            "itemsPerPage": limit,
+            "ordering": {
+                "field": "notificationDate",
+                "direction": "DESC"
+            }
         }
 
         session = requests.Session()
         session.headers.update(HEADERS)
 
-        response = session.get(RASFF_API_URL, params=params, timeout=20)
+        response = session.post(RASFF_API_URL, json=payload, timeout=25)
         response.raise_for_status()
 
         data = response.json()
-        notifications = data.get("notifications", data.get("content", []))
+
+        # API farklı yapılarda dönebilir
+        notifications = (
+            data.get("notifications", [])
+            or data.get("content", [])
+            or data.get("results", [])
+            or []
+        )
 
         if not notifications:
             return fallback_rasff_examples()
 
         results = []
         for i, notif in enumerate(notifications[:limit]):
-            # API alanlarını oku
-            reference = notif.get("reference", f"rasff-{i}")
-            subject = notif.get("subject", "RASFF Notification")
-            notif_type = notif.get("notificationType", "")
-            category = notif.get("category", "")
-            date_raw = notif.get("notificationDate", "")
-            country = notif.get("notifyingCountry", "EU")
+            reference = str(
+                notif.get("reference", "")
+                or notif.get("notificationReference", "")
+                or f"unknown-{i}"
+            )
+            subject = str(
+                notif.get("subject", "")
+                or notif.get("title", "")
+                or "RASFF Notification"
+            )
+            notif_type = str(notif.get("notificationType", "") or "")
+            category = str(notif.get("category", "") or "")
+            country = str(
+                notif.get("notifyingCountry", "")
+                or notif.get("originCountry", "")
+                or "EU"
+            )
 
             # Tarih
+            date_raw = str(
+                notif.get("notificationDate", "")
+                or notif.get("date", "")
+                or ""
+            )
             try:
-                if "T" in str(date_raw):
-                    date_str = date_raw[:10]
-                else:
-                    date_str = str(date_raw)[:10]
+                date_str = date_raw[:10] if len(date_raw) >= 10 else datetime.utcnow().strftime("%Y-%m-%d")
             except Exception:
                 date_str = datetime.utcnow().strftime("%Y-%m-%d")
 
@@ -100,21 +131,23 @@ def fetch_rasff_updates(limit=5):
             topic = detect_topic(combined_text)
             risk = detect_risk(combined_text)
 
-            detail_url = f"{RASFF_DETAIL_BASE}/{reference}"
+            detail_url = f"https://webgate.ec.europa.eu/rasff-window/screen/notification/{reference}"
 
             if risk == "High":
-                impact = "This may require immediate compliance escalation, supplier review, or product containment."
-                action = "Assess exposure, review supplier controls, and determine whether market action is needed."
+                impact = "May require immediate compliance escalation, supplier review, or product containment."
+                action = "Assess exposure, review supplier controls, determine whether market action is needed."
             elif risk == "Medium":
-                impact = "This may affect documentation, traceability, labeling, or commercial claims."
+                impact = "May affect documentation, traceability, labeling, or commercial claims."
                 action = "Review internal records and identify whether teams need to respond."
             else:
-                impact = "Lower urgency but may still be relevant for compliance review."
+                impact = "Lower urgency but may be relevant for compliance review."
                 action = "Monitor developments and document relevance."
+
+            title = f"{notif_type}: {subject}".strip(": ") if notif_type else subject
 
             results.append({
                 "id": f"rasff-{reference}",
-                "title": f"{notif_type}: {subject}" if notif_type else subject,
+                "title": title,
                 "source": "RASFF",
                 "date": date_str,
                 "jurisdiction": "EU",
@@ -133,5 +166,6 @@ def fetch_rasff_updates(limit=5):
 
         return results if results else fallback_rasff_examples()
 
-    except Exception:
+    except Exception as e:
+        print(f"RASFF fetch error: {e}")
         return fallback_rasff_examples()
