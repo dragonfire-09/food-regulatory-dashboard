@@ -102,24 +102,18 @@ def remove_work_item(item_id, item_type):
     ]
     save_work_items(items)
 
-def add_to_watchlist(item):
-    work_items = load_work_items()
+def update_work_item_status(item_id, item_type, new_status):
+    items = load_work_items()
 
-    item_id = str(item.get("id", ""))
+    for x in items:
+        if (
+            str(x.get("id", "")) == str(item_id)
+            and str(x.get("type", "")) == str(item_type)
+        ):
+            x["status"] = new_status
 
-    exists = any(
-        str(x.get("id", "")) == item_id and str(x.get("type", "")) == "watchlist"
-        for x in work_items
-    )
-    if exists:
-        return False
+    save_work_items(items)
 
-    item["type"] = "watchlist"
-    item["status"] = "open"
-
-    work_items.append(item)
-    save_work_items(work_items)
-    return True
 
 def add_to_watchlist(item):
     work_items = load_work_items()
@@ -139,7 +133,6 @@ def add_to_watchlist(item):
 
     work_items.append(item)
     save_work_items(work_items)
-
     return True
 
 # ================================================================
