@@ -1,14 +1,10 @@
 import requests
 from datetime import datetime
 
-RASFF_API_URL = (
-    "https://webgate.ec.europa.eu/rasff-window/backend/shared/notifications/"
-    "search/consolidated"
-)
+RASFF_API_URL = "https://webgate.ec.europa.eu/rasff-window/backend/shared/notifications"
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (compatible; FoodRegDashboard/1.0)",
     "Accept": "application/json",
-    "Content-Type": "application/json",
 }
 
 
@@ -30,7 +26,7 @@ def detect_risk(text):
     if any(w in t for w in [
         "salmonella", "listeria", "contamination",
         "undeclared allergen", "recall", "aflatoxin",
-        "e. coli", "hepatitis", "norovirus", "clostridium"
+        "e. coli", "hepatitis", "norovirus"
     ]):
         return "High"
     if any(w in t for w in [
@@ -66,104 +62,162 @@ def fallback_rasff_examples():
 
 
 def fetch_rasff_updates(limit=10):
-    try:
-        payload = {
-            "pageNumber": 1,
-            "itemsPerPage": limit,
-            "ordering": {
-                "field": "notificationDate",
-                "direction": "DESC"
-            }
-        }
+    """RASFF backend API'den bildirim çeker - birden fazla endpoint dener."""
+    import sys
 
-        session = requests.Session()
-        session.headers.update(HEADERS)
+    endpoints = [
+        {
+            "name": "GET notifications",
+            "method": "GET",
+            "url": "https://webgate.ec.europa.eu/rasff-window/backend/shared/notifications",
+            "params": {"pageSize": str(limit), "page": "1"},
+            "json_body": None,
+        },
+        {
+            "name": "POST search",
+            "method": "POST",
+            "url": "https://webgate.ec.europa.eu/rasff-window/backend/shared/notifications/search",
+            "params": None,
+            "json_body": {"pageNumber": 1, "itemsPerPage": limit},
+        },
+        {
+            "name": "GET list",
+            "method": "GET",
+            "url": "https://webgate.ec.europa.eu/rasff-window/backend/shared/notifications/list",
+            "params": {"pageSize": str(limit)},
+            "json_body": None,
+        },
+        {
+            "name": "POST consolidated",
+            "method": "POST",
+            "url": "https://webgate.ec.europa.eu/rasff-window/backend/shared/notifications/search/consolidated",
+            "params": None,
+            "json_body": {"pageNumber": 1, "itemsPerPage": limit},
+        },
+    ]
 
-        response = session.post(
-            RASFF_API_URL,
-            json=payload,
-            timeout=25
-        )
-        response.raise_for_status()
+    session = requests.Session()
+    session.headers.update(HEADERS)
 
-        data = response.json()
+    for ep in endpoints:
+        try:
+            sys.stderr.write(f"[RASFF] Trying: {ep['name']} -> {ep['url']}\n")
+            sys.stderr.flush()
 
-        notifications = (
-            data.get("notifications", [])
-            or data.get("content", [])
-            or data.get("results", [])
-            or []
-        )
-
-        if not notifications:
-            print("[RASFF] API returned empty notifications")
-            return fallback_rasff_examples()
-
-        results = []
-        for i, notif in enumerate(notifications[:limit]):
-            reference = str(
-                notif.get("reference", "")
-                or notif.get("notificationReference", "")
-                or f"unknown-{i}"
-            )
-            subject = str(
-                notif.get("subject", "")
-                or notif.get("title", "")
-                or "RASFF Notification"
-            )
-            notif_type = str(notif.get("notificationType", "") or "")
-            category = str(notif.get("category", "") or "")
-
-            date_raw = str(
-                notif.get("notificationDate", "")
-                or notif.get("date", "")
-                or ""
-            )
-            try:
-                date_str = date_raw[:10] if len(date_raw) >= 10 else datetime.utcnow().strftime("%Y-%m-%d")
-            except Exception:
-                date_str = datetime.utcnow().strftime("%Y-%m-%d")
-
-            combined_text = f"{subject} {category} {notif_type}"
-            topic = detect_topic(combined_text)
-            risk = detect_risk(combined_text)
-
-            detail_url = f"https://webgate.ec.europa.eu/rasff-window/screen/notification/{reference}"
-
-            if risk == "High":
-                impact = "May require immediate compliance escalation or product containment."
-                action = "Assess exposure and review supplier controls."
-            elif risk == "Medium":
-                impact = "May affect documentation, traceability, or labeling."
-                action = "Review internal records."
+            if ep["method"] == "GET":
+                resp = session.get(ep["url"], params=ep["params"], timeout=20)
             else:
-                impact = "Lower urgency but relevant for compliance review."
-                action = "Monitor developments."
+                resp = session.post(
+                    ep["url"],
+                    json=ep["json_body"],
+                    headers={"Content-Type": "application/json"},
+                    timeout=20,
+                )
 
-            title = f"{notif_type}: {subject}".strip(": ") if notif_type else subject
+            sys.stderr.write(f"[RASFF] {ep['name']} status: {resp.status_code}\n")
+            sys.stderr.flush()
 
-            results.append({
-                "id": f"rasff-{reference}",
-                "title": title,
-                "source": "RASFF",
-                "date": date_str,
-                "jurisdiction": "EU",
-                "topic": topic,
-                "risk_level": risk,
-                "ai_summary": subject,
-                "business_impact": impact,
-                "recommended_action": action,
-                "raw_text": combined_text,
-                "url": detail_url,
-                "notification_reference": reference,
-                "source_status": "live",
-                "fetch_method": "rasff_api",
-                "last_verified": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
-            })
+            if resp.status_code != 200:
+                continue
 
-        print(f"[RASFF] Fetched {len(results)} live items")
-        return results if results else fallback_rasff_examples()
+            # JSON parse dene
+            try:
+                data = resp.json()
+            except Exception:
+                sys.stderr.write(f"[RASFF] {ep['name']} not JSON\n")
+                sys.stderr.flush()
+                continue
 
-    except Exception as e:
-        print(f"[RASFF] Error: {e}")
-        return fallback_rasff_examples()
+            # Bildirimleri bul
+            notifications = []
+            if isinstance(data, list):
+                notifications = data
+            elif isinstance(data, dict):
+                for key in ["notifications", "content", "results", "data", "items"]:
+                    if key in data and isinstance(data[key], list):
+                        notifications = data[key]
+                        break
+
+            sys.stderr.write(f"[RASFF] {ep['name']} found {len(notifications)} items\n")
+            sys.stderr.flush()
+
+            if not notifications:
+                continue
+
+            # Parse et
+            results = []
+            for i, notif in enumerate(notifications[:limit]):
+                reference = str(
+                    notif.get("reference", "")
+                    or notif.get("notificationReference", "")
+                    or notif.get("id", "")
+                    or f"unknown-{i}"
+                )
+                subject = str(
+                    notif.get("subject", "")
+                    or notif.get("title", "")
+                    or notif.get("description", "")
+                    or "RASFF Notification"
+                )
+                notif_type = str(notif.get("notificationType", "") or "")
+                category = str(notif.get("category", "") or "")
+
+                date_raw = str(
+                    notif.get("notificationDate", "")
+                    or notif.get("date", "")
+                    or notif.get("ecValidFromDate", "")
+                    or ""
+                )
+                try:
+                    date_str = date_raw[:10] if len(date_raw) >= 10 else datetime.utcnow().strftime("%Y-%m-%d")
+                except Exception:
+                    date_str = datetime.utcnow().strftime("%Y-%m-%d")
+
+                combined_text = f"{subject} {category} {notif_type}"
+                topic = detect_topic(combined_text)
+                risk = detect_risk(combined_text)
+
+                title = f"{notif_type}: {subject}".strip(": ") if notif_type else subject
+
+                if risk == "High":
+                    impact = "May require immediate compliance escalation or product containment."
+                    action = "Assess exposure and review supplier controls."
+                elif risk == "Medium":
+                    impact = "May affect documentation, traceability, or labeling."
+                    action = "Review internal records."
+                else:
+                    impact = "Lower urgency but relevant for compliance review."
+                    action = "Monitor developments."
+
+                results.append({
+                    "id": f"rasff-{reference}",
+                    "title": title,
+                    "source": "RASFF",
+                    "date": date_str,
+                    "jurisdiction": "EU",
+                    "topic": topic,
+                    "risk_level": risk,
+                    "ai_summary": subject,
+                    "business_impact": impact,
+                    "recommended_action": action,
+                    "raw_text": combined_text,
+                    "url": f"https://webgate.ec.europa.eu/rasff-window/screen/notification/{reference}",
+                    "notification_reference": reference,
+                    "source_status": "live",
+                    "fetch_method": "rasff_api",
+                    "last_verified": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+                })
+
+            if results:
+                sys.stderr.write(f"[RASFF] SUCCESS with {ep['name']}: {len(results)} items\n")
+                sys.stderr.flush()
+                return results
+
+        except Exception as e:
+            sys.stderr.write(f"[RASFF] {ep['name']} error: {e}\n")
+            sys.stderr.flush()
+            continue
+
+    sys.stderr.write("[RASFF] All endpoints failed, using fallback\n")
+    sys.stderr.flush()
+    return fallback_rasff_examples()
