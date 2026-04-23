@@ -2,7 +2,7 @@ import feedparser
 from datetime import datetime
 
 
-EFSA_RSS_URL = "https://www.efsa.europa.eu/en/rss/news"
+EFSA_RSS_URL = "https://www.efsa.europa.eu/en/press/rss"
 
 
 def detect_topic(text: str) -> str:
@@ -76,11 +76,38 @@ def build_recommended_action(risk_level: str, topic: str) -> str:
     return "Review the update and determine whether internal guidance or monitoring actions are needed."
 
 
+def fallback_efsa_examples():
+    now_str = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    return [
+        {
+            "id": "efsa-fallback-1",
+            "title": "EFSA fallback sample: no live RSS items returned",
+            "source": "EFSA",
+            "date": datetime.utcnow().strftime("%Y-%m-%d"),
+            "jurisdiction": "EU",
+            "topic": "Food Safety",
+            "risk_level": "Low",
+            "ai_summary": "No live EFSA RSS items were returned at fetch time, so a fallback record is being shown.",
+            "business_impact": "This is a fallback sample and should not be treated as live regulatory intelligence.",
+            "recommended_action": "Check the EFSA feed URL and retry the live fetch.",
+            "raw_text": "Fallback EFSA sample record.",
+            "url": EFSA_RSS_URL,
+            "source_status": "fallback",
+            "fetch_method": "fallback",
+            "notification_reference": "n/a",
+            "last_verified": now_str,
+        }
+    ]
+
+
 def fetch_efsa_updates(limit: int = 10):
     feed = feedparser.parse(EFSA_RSS_URL)
 
+    if getattr(feed, "bozo", False) and not getattr(feed, "entries", None):
+        return fallback_efsa_examples()
+
     if not getattr(feed, "entries", None):
-        return []
+        return fallback_efsa_examples()
 
     results = []
 
@@ -92,7 +119,7 @@ def fetch_efsa_updates(limit: int = 10):
         topic = detect_topic(combined_text)
         risk_level = detect_risk(combined_text)
 
-        published_parsed = entry.get("published_parsed")
+        published_parsed = entry.get("published_parsed") or entry.get("updated_parsed")
         date_str = normalize_date(published_parsed) if published_parsed else datetime.utcnow().strftime("%Y-%m-%d")
 
         link = entry.get("link", "https://www.efsa.europa.eu/")
@@ -110,8 +137,6 @@ def fetch_efsa_updates(limit: int = 10):
             "recommended_action": build_recommended_action(risk_level, topic),
             "raw_text": summary if summary else title,
             "url": link,
-
-            # metadata
             "source_status": "live",
             "fetch_method": "rss_feed",
             "notification_reference": "n/a",
@@ -120,4 +145,4 @@ def fetch_efsa_updates(limit: int = 10):
 
         results.append(item)
 
-    return results
+    return results if results else fallback_efsa_examples()
