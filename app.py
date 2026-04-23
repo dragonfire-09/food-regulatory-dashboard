@@ -919,7 +919,7 @@ def render_overview(filtered, ct):
     )
     
     if not filtered.empty:
-    top3 = filtered.sort_values(
+       top3 = filtered.sort_values(
         ["impact_score", "confidence_score"],
         ascending=False
     ).head(3)
