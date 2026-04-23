@@ -1221,7 +1221,7 @@ def render_overview(filtered, ct):
     # ============================================================
     # Quick Analytics
     # ============================================================
-       st.subheader("Quick Analytics")
+    st.subheader("Quick Analytics")
 
     if not filtered.empty:
         fr = get_frames(filtered)
