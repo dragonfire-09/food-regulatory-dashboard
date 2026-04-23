@@ -2184,7 +2184,7 @@ def render_comparison(filtered, ct):
                 "Monitor": int((tmp["_p"] == "Monitor").sum()),
             })
         cdf = pd.DataFrame(cr)
-        st.dataframe(cdf, width=0, hide_index=True)
+        st.dataframe(cdf, width="stretch", hide_index=True)
         mel = cdf.melt(id_vars="Client", value_vars=["Immediate", "Review", "Monitor"])
         fig = px.bar(
             mel, x="Client", y="value", color="variable",
