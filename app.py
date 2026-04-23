@@ -905,122 +905,72 @@ def render_overview(filtered, ct):
     c5.metric("Avg Impact", f"{avg}/10")
 
     # --- Compact Client Insights (clickable) ---
-st.subheader("Client Insights")
+    st.subheader("Client Insights")
 
-if filtered.empty:
-    st.info("No data available.")
-else:
-    ins = client_insights(filtered, ct)
+    if filtered.empty:
+        st.info("No data available.")
+    else:
+        ins = client_insights(filtered, ct)
 
-    # Top 3 items (yüksek etki + güven)
-    top3 = filtered.sort_values(
-        ["impact_score", "confidence_score"],
-        ascending=False
-    ).head(3)
-
-    rows_html = ""
-    for _, r in top3.iterrows():
-        title = r.get("title", "Untitled")
-        why = r.get("why_this_matters", "")
-        url = r.get("url", "")
-        source = r.get("source", "")
-        risk = str(r.get("risk_level", "")).lower()
-
-        # küçük risk badge
-        risk_badge = ""
-        if risk == "high":
-            risk_badge = '<span style="background:#fee2e2;color:#991b1b;padding:2px 6px;border-radius:6px;font-size:0.7rem;margin-left:6px;">HIGH</span>'
-        elif risk == "medium":
-            risk_badge = '<span style="background:#fef3c7;color:#92400e;padding:2px 6px;border-radius:6px;font-size:0.7rem;margin-left:6px;">MED</span>'
-
-        link_html = f'<a href="{url}" target="_blank" style="text-decoration:none;color:#1d4ed8;">{title} ↗</a>' if url else title
-
-        rows_html += f"""
-        <div style="padding:0.55rem 0;border-bottom:1px dashed #e5e7eb;">
-            <div style="font-weight:600;font-size:0.88rem;color:#0f172a;">
-                {link_html}{risk_badge}
-            </div>
-            <div style="font-size:0.80rem;color:#475569;line-height:1.45;">
-                {why}
-            </div>
-            <div style="font-size:0.72rem;color:#94a3b8;margin-top:2px;">
-                {source}
-            </div>
-        </div>
-        """
-
-    # Trend ikon
-    trend_icon = {"up": "📈", "down": "📉", "stable": "➡️"}.get(ins.get("trend"), "➡️")
-
-    st.markdown(
-        f"""
-        <div style="
-            background:linear-gradient(135deg,#f8fafc 0%,#eef2ff 100%);
-            border:1px solid #e2e8f0;
-            border-radius:14px;
-            padding:0.9rem 1rem;
-            margin-bottom:0.8rem;
-        ">
-            <div style="font-weight:700;font-size:0.9rem;color:#1e293b;margin-bottom:0.35rem;">
-                {trend_icon} {ins.get("headline","")}
-            </div>
-
-            <div style="font-size:0.78rem;color:#475569;margin-bottom:0.5rem;">
-                <b>Focus:</b> {ins.get("focus","")} &nbsp;•&nbsp;
-                <b>Next:</b> {ins.get("next_step","")}
-            </div>
-
-            {rows_html}
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
-    # Why this matters
-    if not filtered.empty:
         top3 = filtered.sort_values(
             ["impact_score", "confidence_score"],
             ascending=False
         ).head(3)
 
-        items_html = ""
+        rows_html = ""
+        for _, r in top3.iterrows():
+            title = r.get("title", "Untitled")
+            why = r.get("why_this_matters", "")
+            url = r.get("url", "")
+            source = r.get("source", "")
+            risk = str(r.get("risk_level", "")).lower()
 
-        for _, row in top3.iterrows():
-            items_html += f"""
-            <div style="margin-bottom:0.7rem;">
-                <div style="font-weight:700;color:#0f172a;font-size:0.9rem;">
-                    {row.get("title", "Untitled")}
+            risk_badge = ""
+            if risk == "high":
+                risk_badge = '<span style="background:#fee2e2;color:#991b1b;padding:2px 6px;border-radius:6px;font-size:0.7rem;margin-left:6px;">HIGH</span>'
+            elif risk == "medium":
+                risk_badge = '<span style="background:#fef3c7;color:#92400e;padding:2px 6px;border-radius:6px;font-size:0.7rem;margin-left:6px;">MED</span>'
+
+            link_html = f'<a href="{url}" target="_blank" style="text-decoration:none;color:#1d4ed8;">{title} ↗</a>' if url else title
+
+            rows_html += f"""
+            <div style="padding:0.55rem 0;border-bottom:1px dashed #e5e7eb;">
+                <div style="font-weight:600;font-size:0.88rem;color:#0f172a;">
+                    {link_html}{risk_badge}
                 </div>
-                <div style="font-size:0.86rem;color:#475569;line-height:1.5;">
-                    {row.get("why_this_matters", "No explanation available.")}
+                <div style="font-size:0.80rem;color:#475569;line-height:1.45;">
+                    {why}
+                </div>
+                <div style="font-size:0.72rem;color:#94a3b8;margin-top:2px;">
+                    {source}
                 </div>
             </div>
             """
 
+        trend_icon = {"up": "📈", "down": "📉", "stable": "➡️"}.get(ins.get("trend"), "➡️")
+
         st.markdown(
             f"""
             <div style="
-                background:#ffffff;
+                background:linear-gradient(135deg,#f8fafc 0%,#eef2ff 100%);
                 border:1px solid #e2e8f0;
                 border-radius:14px;
-                padding:1rem 1.1rem;
-                margin-bottom:0.9rem;
-                box-shadow:0 2px 8px rgba(15,23,42,0.04);
+                padding:0.9rem 1rem;
+                margin-bottom:0.8rem;
             ">
-                <div style="
-                    font-size:0.75rem;
-                    font-weight:700;
-                    color:#64748b;
-                    text-transform:uppercase;
-                    letter-spacing:0.05em;
-                    margin-bottom:0.5rem;
-                ">
-                    Why this matters
+                <div style="font-weight:700;font-size:0.9rem;color:#1e293b;margin-bottom:0.35rem;">
+                    {trend_icon} {ins.get("headline","")}
                 </div>
-                {items_html}
+
+                <div style="font-size:0.78rem;color:#475569;margin-bottom:0.5rem;">
+                    <b>Focus:</b> {ins.get("focus","")} &nbsp;•&nbsp;
+                    <b>Next:</b> {ins.get("next_step","")}
+                </div>
+
+                {rows_html}
             </div>
             """,
-            unsafe_allow_html=True,
+            unsafe_allow_html=True
         )
 
     render_urgent(filtered)
