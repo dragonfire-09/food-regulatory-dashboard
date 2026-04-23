@@ -1051,7 +1051,23 @@ def render_reports(filtered, ct):
         s1.metric("Immediate", int((filtered["priority"] == "Immediate").sum()))
         s2.metric("Review", int((filtered["priority"] == "Review").sum()))
         s3.metric("Monitor", int((filtered["priority"] == "Monitor").sum()))
+        
+    def render_updates(filtered, ct):
+    st.subheader("Latest Regulatory Updates")
 
+    q = st.text_input(
+        "Search updates",
+        placeholder="Search by title, topic, source..."
+    )
+
+    view_df = search(filtered, q)
+
+    if view_df.empty:
+        st.info("No updates found.")
+        return
+
+    for idx, row in view_df.iterrows():
+        render_card(row, idx, ct)
 
 # ================================================================
 # SINGLE UPDATE CARD - guvenli cache okuma
