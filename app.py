@@ -993,7 +993,6 @@ def render_timeline(filtered, mx=8):
 # VIEW: OVERVIEW (istatistikler SADECE burada, compact)
 # ================================================================
 def render_overview(filtered, ct):
-    # 5 kompakt metrik - TEK satır
     c1, c2, c3, c4, c5 = st.columns(5)
 
     t = len(filtered)
@@ -1078,57 +1077,54 @@ def render_overview(filtered, ct):
                 """,
                 unsafe_allow_html=True,
             )
-            
-           # --- Compact Client Insights (clickable) ---
-        st.subheader("Client Insights")
 
-if filtered.empty:
-    st.info("No data available.")
-else:
-    ins = client_insights(filtered, ct)
+    st.subheader("Client Insights")
 
-    st.info(ins.get("headline", ""))
+    if filtered.empty:
+        st.info("No data available.")
+    else:
+        ins = client_insights(filtered, ct)
+        st.info(ins.get("headline", ""))
 
-    top_item_for_action = filtered.sort_values(
-        ["impact_score", "confidence_score"],
-        ascending=False
-    ).iloc[0]
+        top_item_for_action = filtered.sort_values(
+            ["impact_score", "confidence_score"],
+            ascending=False
+        ).iloc[0]
 
-    c_focus, c_next = st.columns(2)
+        c_focus, c_next = st.columns(2)
 
-    with c_focus:
-        st.caption("Focus")
-        st.write(ins.get("focus", ""))
+        with c_focus:
+            st.caption("Focus")
+            st.write(ins.get("focus", ""))
 
-    with c_next:
-        st.caption("Next")
+        with c_next:
+            st.caption("Next")
+            next_step = ins.get("next_step", "")
+            st.write(next_step)
 
-        next_step = ins.get("next_step", "")
-        st.write(next_step)
+            if st.button("Create Task", key=f"task_btn_{ct}_overview"):
+                item = {
+                    "id": str(top_item_for_action.get("id", "")),
+                    "type": "task",
+                    "status": "open",
+                    "created_at": datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC"),
+                    "client_type": ct,
+                    "title": f"Review: {top_item_for_action.get('title', 'Untitled')}",
+                    "source": top_item_for_action.get("source", ""),
+                    "risk_level": top_item_for_action.get("risk_level", ""),
+                    "priority": top_item_for_action.get("priority", ""),
+                    "next_step": next_step,
+                    "url": top_item_for_action.get("url", ""),
+                }
 
-        if st.button("Create Task", key=f"task_btn_{ct}_overview"):
-            item = {
-                "id": str(top_item_for_action.get("id", "")),
-                "type": "task",
-                "status": "open",
-                "created_at": datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC"),
-                "client_type": ct,
-                "title": f"Review: {top_item_for_action.get('title', 'Untitled')}",
-                "source": top_item_for_action.get("source", ""),
-                "risk_level": top_item_for_action.get("risk_level", ""),
-                "priority": top_item_for_action.get("priority", ""),
-                "next_step": next_step,
-                "url": top_item_for_action.get("url", ""),
-            }
+                added = add_work_item(item)
 
-            added = add_work_item(item)
-
-            if added:
-                analytics["actions"] += 1
-                save_analytics(analytics)
-                st.success("Task created")
-            else:
-                st.info("Task already exists")
+                if added:
+                    analytics["actions"] += 1
+                    save_analytics(analytics)
+                    st.success("Task created")
+                else:
+                    st.info("Task already exists")
 
         st.markdown("**Top relevant items**")
 
@@ -1168,6 +1164,59 @@ else:
 
     render_urgent(filtered)
     render_timeline(filtered)
+
+    st.subheader("Quick Analytics")
+
+    if not filtered.empty:
+        fr = get_frames(filtered)
+
+        immediate_count = int((filtered["priority"] == "Immediate").sum()) if "priority" in filtered.columns else 0
+        high_risk_count = int((filtered["risk_level"].astype(str).str.lower() == "high").sum()) if "risk_level" in filtered.columns else 0
+        avg_impact = round(filtered["impact_score"].mean(), 1) if "impact_score" in filtered.columns else 0
+
+        k1, k2, k3 = st.columns(3)
+        k1.metric("Immediate", immediate_count)
+        k2.metric("High Risk", high_risk_count)
+        k3.metric("Avg Impact", f"{avg_impact}/10")
+
+        g1, g2 = st.columns(2)
+
+        with g1:
+            if "topic" in fr:
+                fig_topic = px.pie(
+                    fr["topic"],
+                    names="topic",
+                    values="count",
+                    hole=0.5
+                )
+                fig_topic.update_layout(
+                    margin=dict(t=10, b=10, l=10, r=10),
+                    height=300,
+                    legend_title_text=""
+                )
+                st.plotly_chart(fig_topic, use_container_width=True)
+
+        with g2:
+            if "pri" in fr:
+                fig_pri = px.bar(
+                    fr["pri"],
+                    x="priority",
+                    y="count",
+                    color="priority",
+                    color_discrete_map=PRIORITY_COLORS,
+                    text="count"
+                )
+                fig_pri.update_layout(
+                    margin=dict(t=10, b=10, l=10, r=10),
+                    height=300,
+                    showlegend=False,
+                    xaxis_title="",
+                    yaxis_title=""
+                )
+                fig_pri.update_traces(textposition="outside")
+                st.plotly_chart(fig_pri, use_container_width=True)
+    else:
+        st.info("No analytics available.")
 
     # ============================================================
     # Quick Analytics
