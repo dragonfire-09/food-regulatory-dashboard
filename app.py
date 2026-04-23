@@ -938,7 +938,7 @@ def render_overview(filtered, ct):
 
     st.markdown("**Top relevant items**")
 
-        top3 = filtered.sort_values(
+    top3 = filtered.sort_values(
             ["impact_score", "confidence_score"],
             ascending=False
         ).head(3)
