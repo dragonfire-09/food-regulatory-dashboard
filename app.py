@@ -993,92 +993,21 @@ def render_timeline(filtered, mx=8):
 # VIEW: OVERVIEW (istatistikler SADECE burada, compact)
 # ================================================================
 def render_overview(filtered, ct):
-    c1, c2, c3, c4, c5 = st.columns(5)
+    st.subheader("Overview")
 
-    t = len(filtered)
-    imm = int((filtered["priority"] == "Immediate").sum()) if not filtered.empty else 0
-    rev = int((filtered["priority"] == "Review").sum()) if not filtered.empty else 0
-    high = int((filtered["risk_level"].astype(str).str.lower() == "high").sum()) if not filtered.empty else 0
-    avg = round(filtered["impact_score"].mean(), 1) if not filtered.empty else 0
+    # --- Metrics ---
+    c1, c2, c3 = st.columns(3)
 
-    c1.metric("Updates", t)
-    c2.metric("Immediate", imm)
-    c3.metric("Review", rev)
-    c4.metric("High Risk", high)
-    c5.metric("Avg Impact", f"{avg}/10")
+    immediate_count = int((filtered["priority"] == "Immediate").sum()) if not filtered.empty else 0
+    high_risk_count = int((filtered["risk_level"].astype(str).str.lower() == "high").sum()) if not filtered.empty else 0
+    avg_impact = round(filtered["impact_score"].mean(), 1) if not filtered.empty else 0
 
-    st.caption(f"👁️ {analytics['visits']} visitors • Need context? Expand below")
+    c1.metric("Immediate", immediate_count)
+    c2.metric("High Risk", high_risk_count)
+    c3.metric("Avg Impact", f"{avg_impact}/10")
 
-    with st.expander("About this tool", expanded=False):
-        intro1, intro2, intro3 = st.columns(3)
-
-        with intro1:
-            st.markdown(
-                """
-                <div style="
-                    background:#ffffff;
-                    border:1px solid #e2e8f0;
-                    border-radius:14px;
-                    padding:0.9rem;
-                    min-height:140px;
-                ">
-                    <div style="font-size:0.95rem;margin-bottom:0.3rem;">🔎</div>
-                    <div style="font-size:0.9rem;font-weight:700;color:#0f172a;margin-bottom:0.3rem;">
-                        What it does
-                    </div>
-                    <div style="font-size:0.82rem;color:#475569;">
-                        Converts regulatory updates into structured, actionable insights.
-                    </div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-
-        with intro2:
-            st.markdown(
-                """
-                <div style="
-                    background:#ffffff;
-                    border:1px solid #e2e8f0;
-                    border-radius:14px;
-                    padding:0.9rem;
-                    min-height:140px;
-                ">
-                    <div style="font-size:0.95rem;margin-bottom:0.3rem;">⚡</div>
-                    <div style="font-size:0.9rem;font-weight:700;color:#0f172a;margin-bottom:0.3rem;">
-                        Why it matters
-                    </div>
-                    <div style="font-size:0.82rem;color:#475569;">
-                        Turns information into decisions: urgency, risk, and next steps.
-                    </div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-
-        with intro3:
-            st.markdown(
-                """
-                <div style="
-                    background:#ffffff;
-                    border:1px solid #e2e8f0;
-                    border-radius:14px;
-                    padding:0.9rem;
-                    min-height:140px;
-                ">
-                    <div style="font-size:0.95rem;margin-bottom:0.3rem;">📈</div>
-                    <div style="font-size:0.9rem;font-weight:700;color:#0f172a;margin-bottom:0.3rem;">
-                        Why it scales
-                    </div>
-                    <div style="font-size:0.82rem;color:#475569;">
-                        Supports alerts, monitoring, reporting, and AI-driven workflows.
-                    </div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-
-       st.subheader("Client Insights")
+    # --- Client Insights ---
+    st.subheader("Client Insights")
 
     if filtered.empty:
         st.info("No data available.")
