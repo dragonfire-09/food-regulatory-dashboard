@@ -917,7 +917,8 @@ def render_overview(filtered, ct):
         f'<strong>Next Step:</strong> {ins["next_step"]}</div></div>',
         unsafe_allow_html=True,
     )
-if not filtered.empty:
+    
+    if not filtered.empty:
     top3 = filtered.sort_values(["impact_score", "confidence_score"], ascending=False).head(3)
 
     items_html = ""
