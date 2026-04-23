@@ -1130,9 +1130,8 @@ def render_overview(filtered, ct):
                 """,
                 unsafe_allow_html=True,
             )
-
-     def render_overview(filtered, ct):
-         st.subheader("Overview")
+      def render_overview(filtered, ct):
+          st.subheader("Overview")
 
     # ============================================================
     # EXECUTIVE BAR
