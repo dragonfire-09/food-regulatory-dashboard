@@ -1,6 +1,6 @@
 import feedparser
 from datetime import datetime
-
+ 
 EFSA_RSS_URL = "https://www.efsa.europa.eu/en/press/rss"
 
 
